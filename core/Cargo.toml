@@ -1,0 +1,19 @@
+[package]
+name = "pui-core"
+version = "0.5.0"
+authors = ["RustyYato <krishna.sd.2012@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+
+default = ['std']
+std = ['alloc', 'once_cell']
+alloc = []
+
+[dependencies]
+radium = '0.6'
+once_cell = { version = '1', optional = true }
+parking_lot = { version = '0.11', optional = true }
+cfg-if = '1'
