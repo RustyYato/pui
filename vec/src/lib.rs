@@ -124,6 +124,13 @@ impl<T, I: OneShotIdentifier> PuiVec<T, I> {
     }
 }
 
+impl<T, I> IntoIterator for PuiVec<T, I> {
+    type Item = T;
+    type IntoIter = std::vec::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter { self.vec.into_iter() }
+}
+
 impl<A, T, I> Extend<A> for PuiVec<T, I>
 where
     Vec<T>: Extend<A>,

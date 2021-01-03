@@ -52,6 +52,12 @@ impl<T, I> Arena<T, I> {
         }
     }
 
+    pub fn ident(&self) -> &I { self.slots.ident() }
+
+    pub fn slots(&self) -> usize { self.slots.len() }
+
+    pub fn capacity(&self) -> usize { self.slots.capacity() }
+
     pub fn reserve(&mut self, additional: usize) { self.slots.reserve(additional) }
 }
 
@@ -160,7 +166,7 @@ impl<T, I: pui_core::OneShotIdentifier> Arena<T, I> {
         }
     }
 
-    pub fn contains(&self, key: Key<I::Token>) -> bool {
+    pub fn contains(&self, key: &Key<I::Token>) -> bool {
         self.slots.get(key.index()).map_or(false, |slot| slot.gen == key.gen)
     }
 
@@ -180,6 +186,88 @@ impl<T, I: pui_core::OneShotIdentifier> Arena<T, I> {
         } else {
             None
         }
+    }
+
+    pub fn keys(&self) -> impl '_ + Iterator<Item = Key<I::Token>> {
+        let token = self.ident().token();
+        self.slots.iter().enumerate().filter_map(move |(index, slot)| {
+            if slot.gen & 1 == 0 {
+                Some(Key {
+                    gen: slot.gen,
+                    index,
+                    token: token.clone(),
+                })
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn values(&self) -> impl '_ + Iterator<Item = &T> {
+        self.slots.iter().filter_map(move |slot| {
+            if slot.gen & 1 == 0 {
+                Some(unsafe { &*slot.data.value })
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn values_mut(&mut self) -> impl '_ + Iterator<Item = &mut T> {
+        self.slots.iter_mut().filter_map(move |slot| {
+            if slot.gen & 1 == 0 {
+                Some(unsafe { &mut *slot.data.value })
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn into_values(self) -> impl Iterator<Item = T> {
+        self.slots.into_iter().filter_map(move |slot| {
+            let mut slot = ManuallyDrop::new(slot);
+            if slot.gen & 1 == 0 {
+                Some(unsafe { ManuallyDrop::take(&mut slot.data.value) })
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn entries(&self) -> impl '_ + Iterator<Item = (Key<I::Token>, &T)> {
+        let token = self.ident().token();
+        self.slots.iter().enumerate().filter_map(move |(index, slot)| {
+            if slot.gen & 1 == 0 {
+                Some((
+                    Key {
+                        gen: slot.gen,
+                        index,
+                        token: token.clone(),
+                    },
+                    unsafe { &*slot.data.value },
+                ))
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn entries_mut(&mut self) -> impl '_ + Iterator<Item = (Key<I::Token>, &mut T)> {
+        let token = self.ident().token();
+        self.slots.iter_mut().enumerate().filter_map(move |(index, slot)| {
+            if slot.gen & 1 == 0 {
+                Some((
+                    Key {
+                        gen: slot.gen,
+                        index,
+                        token: token.clone(),
+                    },
+                    unsafe { &mut *slot.data.value },
+                ))
+            } else {
+                None
+            }
+        })
     }
 }
 
