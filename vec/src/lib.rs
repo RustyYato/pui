@@ -10,7 +10,7 @@ use pui_core::OneShotIdentifier;
 
 mod pui_vec_index;
 
-pub use pui_vec_index::{PuiVecAccess, PuiVecIndex, BuildPuiVecIndex};
+pub use pui_vec_index::{BuildPuiVecIndex, PuiVecAccess, PuiVecIndex};
 
 #[cfg(feature = "pui-core")]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -52,6 +52,10 @@ impl<T, I> PuiVec<T, I> {
     pub fn get<A: PuiVecAccess<T, I>>(&self, index: A) -> Option<&A::Output> { index.get(self) }
 
     pub fn get_mut<A: PuiVecAccess<T, I>>(&mut self, index: A) -> Option<&mut A::Output> { index.get_mut(self) }
+
+    pub fn as_mut_parts(&mut self) -> (&I, &mut [T]) { (&self.ident, &mut self.vec) }
+
+    pub fn into_raw_parts(self) -> (I, Vec<T>) { (self.ident, self.vec) }
 }
 
 impl<T, I> PuiVec<T, I> {
