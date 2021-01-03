@@ -1,17 +1,18 @@
 #![no_std]
-#![cfg_attr(feature = "nightly", feature(step_trait, step_trait_ext))]
 
 extern crate alloc as std;
 
 use core::ops::{Deref, DerefMut, Index, IndexMut};
 use std::vec::Vec;
 
+#[cfg(feature = "pui-core")]
 use pui_core::OneShotIdentifier;
 
 mod pui_vec_index;
 
-pub use pui_vec_index::PuiVecIndex;
+pub use pui_vec_index::{PuiVecAccess, PuiVecIndex, BuildPuiVecIndex};
 
+#[cfg(feature = "pui-core")]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Id<T> {
     index: usize,
@@ -24,6 +25,7 @@ pub struct PuiVec<T, I> {
     vec: Vec<T>,
 }
 
+#[cfg(feature = "pui-core")]
 impl<T> Id<T> {
     pub const unsafe fn new_unchecked(index: usize, token: T) -> Self { Self { index, token } }
 
@@ -47,11 +49,31 @@ impl<T, I> PuiVec<T, I> {
 
     pub fn reserve(&mut self, additional: usize) { self.vec.reserve(additional) }
 
-    pub fn get<A: PuiVecIndex<T, I>>(&self, index: A) -> Option<&A::Output> { index.get(self) }
+    pub fn get<A: PuiVecAccess<T, I>>(&self, index: A) -> Option<&A::Output> { index.get(self) }
 
-    pub fn get_mut<A: PuiVecIndex<T, I>>(&mut self, index: A) -> Option<&mut A::Output> { index.get_mut(self) }
+    pub fn get_mut<A: PuiVecAccess<T, I>>(&mut self, index: A) -> Option<&mut A::Output> { index.get_mut(self) }
 }
 
+impl<T, I> PuiVec<T, I> {
+    pub fn push<Id: BuildPuiVecIndex<I, SliceIndex = usize>>(&mut self, value: T) -> Id {
+        let index = self.vec.len();
+
+        self.vec.push(value);
+
+        unsafe { Id::new_unchecked(index, &self.ident) }
+    }
+
+    pub fn append(&mut self, vec: &mut Vec<T>) { self.vec.append(vec); }
+
+    pub fn extend_from_slice(&mut self, slice: &[T])
+    where
+        T: Clone,
+    {
+        self.vec.extend_from_slice(slice);
+    }
+}
+
+#[cfg(feature = "pui-core")]
 impl<T, I: OneShotIdentifier> PuiVec<T, I> {
     pub fn ids(&self) -> impl ExactSizeIterator<Item = Id<I::Token>> + Clone {
         let token = self.ident.token();
@@ -69,17 +91,6 @@ impl<T, I: OneShotIdentifier> PuiVec<T, I> {
             })
         } else {
             None
-        }
-    }
-
-    pub fn push(&mut self, value: T) -> Id<I::Token> {
-        let index = self.vec.len();
-
-        self.vec.push(value);
-
-        Id {
-            index,
-            token: self.ident.token(),
         }
     }
 
@@ -113,15 +124,6 @@ impl<T, I: OneShotIdentifier> PuiVec<T, I> {
             )
         }
     }
-
-    pub fn append(&mut self, vec: &mut Vec<T>) { self.vec.append(vec); }
-
-    pub fn extend_from_slice(&mut self, slice: &[T])
-    where
-        T: Clone,
-    {
-        self.vec.extend_from_slice(slice);
-    }
 }
 
 impl<T, I> IntoIterator for PuiVec<T, I> {
@@ -140,7 +142,7 @@ where
 
 impl<T, I, A> Index<A> for PuiVec<T, I>
 where
-    A: PuiVecIndex<T, I>,
+    A: PuiVecAccess<T, I>,
 {
     type Output = A::Output;
 
@@ -149,7 +151,7 @@ where
 
 impl<T, I, A> IndexMut<A> for PuiVec<T, I>
 where
-    A: PuiVecIndex<T, I>,
+    A: PuiVecAccess<T, I>,
 {
     fn index_mut(&mut self, index: A) -> &mut Self::Output { index.index_mut(self) }
 }
