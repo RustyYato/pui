@@ -5,9 +5,6 @@ use core::{
 
 use std::{boxed::Box, vec::Vec};
 
-#[cfg(feature = "pui-core")]
-use pui_core::OneShotIdentifier;
-
 use crate::sparse::{Arena as SparseArena, ArenaAccess, BuildArenaKey, VacantEntry as SparseVacantEntry};
 
 pub struct Arena<T, I = ()> {
@@ -25,6 +22,7 @@ pub struct VacantEntry<'a, T, K> {
 impl<T> Arena<T> {
     pub fn new() -> Self { Self::with_ident(()) }
 }
+
 impl<T, I> Arena<T, I> {
     pub fn with_ident(ident: I) -> Self {
         Self {
@@ -116,9 +114,7 @@ impl<T, I> Arena<T, I> {
             *this.cast::<usize>()
         };
 
-        if self.slots.slots() < end {
-            unsafe { core::hint::unreachable_unchecked() }
-        }
+        let end = unsafe { crate::sparse::TrustedIndex::new(end) };
 
         // if the last element wasn't removed
         if let Some(end) = self.slots.get_mut(end) {

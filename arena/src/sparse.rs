@@ -3,53 +3,13 @@ use core::{
     ops::{Index, IndexMut},
 };
 
-#[cfg(feature = "pui-core")]
-use pui_core::OneShotIdentifier;
 use pui_vec::PuiVec;
 
-fn slot_get<T>(slot: &Slot<T>) -> Option<&T> {
-    if slot.gen & 1 == 0 {
-        Some(unsafe { &*slot.data.value })
-    } else {
-        None
-    }
-}
+pub(crate) struct TrustedIndex(usize);
 
-fn slot_get_mut<T>(slot: &mut Slot<T>) -> Option<&mut T> {
-    if slot.gen & 1 == 0 {
-        Some(unsafe { &mut *slot.data.value })
-    } else {
-        None
-    }
-}
-
-fn slot_get_with<T>(slot: &Slot<T>, gen: u32) -> Option<&T> {
-    if slot.gen == gen {
-        Some(unsafe { &*slot.data.value })
-    } else {
-        None
-    }
-}
-
-fn slot_get_mut_with<T>(slot: &mut Slot<T>, gen: u32) -> Option<&mut T> {
-    if slot.gen == gen {
-        Some(unsafe { &mut *slot.data.value })
-    } else {
-        None
-    }
-}
-
-fn slot_remove_with<T>(slot: &mut Slot<T>, gen: u32, index: usize, next: &mut usize) -> Option<T> {
-    if slot.gen == gen {
-        slot.gen |= 1;
-        let value = unsafe { ManuallyDrop::take(&mut slot.data.value) };
-        slot.data = Data {
-            next: replace(next, index),
-        };
-        Some(value)
-    } else {
-        None
-    }
+impl TrustedIndex {
+    #[inline]
+    pub unsafe fn new(index: usize) -> Self { Self(index) }
 }
 
 pub trait ArenaAccess<I> {
@@ -81,13 +41,24 @@ impl<I> ArenaAccess<I> for usize {
         arena.slots.get(*self).map_or(false, |slot| slot.gen & 1 == 0)
     }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I>) -> Option<&'a T> { slot_get(&arena.slots[self]) }
+    fn get<'a, T>(&self, arena: &'a Arena<T, I>) -> Option<&'a T> { arena.slots[self].get() }
 
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I>) -> Option<&'a mut T> { slot_get_mut(&mut arena.slots[self]) }
+    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I>) -> Option<&'a mut T> { arena.slots[self].get_mut() }
+
+    fn try_remove<T>(&self, arena: &mut Arena<T, I>) -> Option<T> { arena.slots[self].remove(*self, &mut arena.next) }
+}
+
+impl<I> ArenaAccess<I> for TrustedIndex {
+    fn contained_in<T>(&self, arena: &Arena<T, I>) -> bool { unsafe { arena.slots.get_unchecked(self.0).gen & 1 == 0 } }
+
+    fn get<'a, T>(&self, arena: &'a Arena<T, I>) -> Option<&'a T> { unsafe { arena.slots.get_unchecked(self.0) }.get() }
+
+    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I>) -> Option<&'a mut T> {
+        unsafe { arena.slots.get_unchecked_mut(self.0) }.get_mut()
+    }
 
     fn try_remove<T>(&self, arena: &mut Arena<T, I>) -> Option<T> {
-        let slot = &mut arena.slots[self];
-        slot_remove_with(slot, slot.gen, *self, &mut arena.next)
+        unsafe { arena.slots.get_unchecked_mut(self.0) }.remove(self.0, &mut arena.next)
     }
 }
 
@@ -101,14 +72,13 @@ impl<I: pui_core::OneShotIdentifier> ArenaAccess<I> for pui_vec::Id<I::Token> {
         arena.ident().owns_token(self.token()) && arena.slots[self].gen & 1 == 0
     }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I>) -> Option<&'a T> { slot_get(&arena.slots[self]) }
+    fn get<'a, T>(&self, arena: &'a Arena<T, I>) -> Option<&'a T> { arena.slots[self].get() }
 
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I>) -> Option<&'a mut T> { slot_get_mut(&mut arena.slots[self]) }
+    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I>) -> Option<&'a mut T> { arena.slots[self].get_mut() }
 
     fn try_remove<T>(&self, arena: &mut Arena<T, I>) -> Option<T> {
         let index = pui_vec::PuiVecIndex::<I>::slice_index(&self);
-        let slot = &mut arena.slots[self];
-        slot_remove_with(slot, slot.gen, index, &mut arena.next)
+        arena.slots[self].remove(index, &mut arena.next)
     }
 }
 
@@ -125,17 +95,14 @@ impl<I> ArenaAccess<I> for Key<usize> {
         arena.slots.get(self.id).map_or(false, |slot| slot.gen == gen)
     }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I>) -> Option<&'a T> { slot_get_with(&arena.slots[self.id], self.gen) }
+    fn get<'a, T>(&self, arena: &'a Arena<T, I>) -> Option<&'a T> { arena.slots[self.id].get_with(self.gen) }
 
     fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I>) -> Option<&'a mut T> {
-        slot_get_mut_with(&mut arena.slots[self.id], self.gen)
+        arena.slots[self.id].get_mut_with(self.gen)
     }
 
     fn try_remove<T>(&self, arena: &mut Arena<T, I>) -> Option<T> {
-        let gen = self.gen;
-        let index = pui_vec::PuiVecIndex::<I>::slice_index(&self.id);
-        let slot = &mut arena.slots[self.id];
-        slot_remove_with(slot, gen, index, &mut arena.next)
+        arena.slots[self.id].remove_with(self.gen, self.id, &mut arena.next)
     }
 }
 
@@ -151,17 +118,14 @@ impl<I: pui_core::OneShotIdentifier> ArenaAccess<I> for Key<pui_vec::Id<I::Token
             && arena.slots.get(self.id.get()).map_or(false, |slot| slot.gen == gen)
     }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I>) -> Option<&'a T> { slot_get_with(&arena.slots[&self.id], self.gen) }
+    fn get<'a, T>(&self, arena: &'a Arena<T, I>) -> Option<&'a T> { arena.slots[&self.id].get_with(self.gen) }
 
     fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I>) -> Option<&'a mut T> {
-        slot_get_mut_with(&mut arena.slots[&self.id], self.gen)
+        arena.slots[&self.id].get_mut_with(self.gen)
     }
 
     fn try_remove<T>(&self, arena: &mut Arena<T, I>) -> Option<T> {
-        let gen = self.gen;
-        let index = self.id.get();
-        let slot = &mut arena.slots[&self.id];
-        slot_remove_with(slot, gen, index, &mut arena.next)
+        arena.slots[&self.id].remove_with(self.gen, self.id.get(), &mut arena.next)
     }
 }
 
@@ -208,6 +172,55 @@ impl<T> Drop for Slot<T> {
     fn drop(&mut self) {
         if self.gen & 1 == 0 {
             unsafe { ManuallyDrop::drop(&mut self.data.value) }
+        }
+    }
+}
+
+impl<T> Slot<T> {
+    fn get(&self) -> Option<&T> {
+        if self.gen & 1 == 0 {
+            Some(unsafe { &*self.data.value })
+        } else {
+            None
+        }
+    }
+
+    fn get_mut(&mut self) -> Option<&mut T> {
+        if self.gen & 1 == 0 {
+            Some(unsafe { &mut *self.data.value })
+        } else {
+            None
+        }
+    }
+
+    fn get_with(&self, gen: u32) -> Option<&T> {
+        if self.gen == gen {
+            Some(unsafe { &*self.data.value })
+        } else {
+            None
+        }
+    }
+
+    fn get_mut_with(&mut self, gen: u32) -> Option<&mut T> {
+        if self.gen == gen {
+            Some(unsafe { &mut *self.data.value })
+        } else {
+            None
+        }
+    }
+
+    fn remove(&mut self, index: usize, next: &mut usize) -> Option<T> { self.remove_with(self.gen, index, next) }
+
+    fn remove_with(&mut self, gen: u32, index: usize, next: &mut usize) -> Option<T> {
+        if self.gen == gen {
+            self.gen |= 1;
+            let value = unsafe { ManuallyDrop::take(&mut self.data.value) };
+            self.data = Data {
+                next: replace(next, index),
+            };
+            Some(value)
+        } else {
+            None
         }
     }
 }
