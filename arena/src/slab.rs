@@ -50,9 +50,9 @@ macro_rules! imp_slab {
 
             pub fn try_remove(&mut self, index: Key) -> Option<T> { self.0.try_remove(index) }
 
-            pub fn iter(&self) -> Values<'_, T> { self.0.values() }
+            pub fn iter(&self) -> Iter<'_, T> { self.0.values() }
 
-            pub fn iter_mut(&mut self) -> ValuesMut<'_, T> { self.0.values_mut() }
+            pub fn iter_mut(&mut self) -> IterMut<'_, T> { self.0.values_mut() }
 
             pub fn entries(&self) -> Entries<'_, T> { self.0.entries() }
 
@@ -62,7 +62,7 @@ macro_rules! imp_slab {
         }
 
         impl<T> IntoIterator for Slab<T> {
-            type IntoIter = IntoValues<T>;
+            type IntoIter = IntoIter<T>;
             type Item = T;
 
             fn into_iter(self) -> Self::IntoIter { self.0.into_values() }
