@@ -248,6 +248,10 @@ impl<T, V: Version> Slot<T, V> {
 }
 
 impl<'a, T, I, V: Version> VacantEntry<'a, T, I, V> {
+    pub fn key<K: BuildArenaKey<I, V>>(&self) -> K {
+        unsafe { K::new_unchecked(self.index, self.updated_gen.save(), self.arena.slots.ident()) }
+    }
+
     pub fn insert<K: BuildArenaKey<I, V>>(self, value: T) -> K {
         unsafe {
             let slot = self.arena.slots.get_unchecked_mut(self.index);
