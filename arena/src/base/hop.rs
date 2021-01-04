@@ -372,6 +372,8 @@ impl<T, I, V: Version> Arena<T, I, V> {
         Some(value)
     }
 
+    pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { key.contained_in(self) }
+
     pub unsafe fn remove_unchecked(&mut self, index: usize) -> T {
         let slot = self.slots.get_unchecked_mut(index);
         let value = ManuallyDrop::take(&mut slot.data.value);
@@ -481,6 +483,12 @@ impl<T, I, V: Version> Arena<T, I, V> {
                 None => i = unsafe { self.freelist(i).end },
             }
             i += 1;
+        }
+    }
+
+    pub fn keys<K: BuildArenaKey<I, V>>(&self) -> Keys<'_, T, I, V, K> {
+        Keys {
+            entries: self.entries(),
         }
     }
 
