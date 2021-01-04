@@ -5,9 +5,9 @@ use crate::{
     version::Unversioned,
 };
 
-type Values<'a, T> = core::slice::Iter<'a, T>;
-type ValuesMut<'a, T> = core::slice::IterMut<'a, T>;
-type IntoValues<T> = std::vec::IntoIter<T>;
+pub type Values<'a, T> = core::slice::Iter<'a, T>;
+pub type ValuesMut<'a, T> = core::slice::IterMut<'a, T>;
+pub type IntoValues<T> = std::vec::IntoIter<T>;
 
 imp_slab! {
     new: Arena::with_ident(()),
