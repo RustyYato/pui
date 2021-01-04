@@ -172,7 +172,7 @@ struct Slot<T, V: Version> {
 }
 
 #[derive(Clone, Copy)]
-pub struct Key<Id, V> {
+pub struct Key<Id, V = crate::version::DefaultVersion> {
     id: Id,
     version: V,
 }

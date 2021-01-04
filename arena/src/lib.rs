@@ -8,3 +8,4 @@ pub mod sparse;
 pub mod version;
 
 pub mod slab;
+pub mod slot_map;
