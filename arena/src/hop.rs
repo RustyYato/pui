@@ -177,7 +177,7 @@ pub struct Key<Id, V> {
     version: V,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Arena<T, I = (), V: Version = DefaultVersion> {
     slots: PuiVec<Slot<T, V>, I>,
     num_elements: usize,
@@ -539,6 +539,34 @@ impl<T, I, V: Version, K: ArenaAccess<I, V>> IndexMut<K> for Arena<T, I, V> {
 use core::fmt;
 
 use crate::version::{DefaultVersion, Version};
+
+impl<T: Clone, V: Version> Clone for Slot<T, V> {
+    fn clone(&self) -> Self {
+        Self {
+            version: self.version,
+            data: if self.version.is_full() {
+                Data {
+                    value: unsafe { self.data.value.clone() },
+                }
+            } else {
+                Data {
+                    free: unsafe { self.data.free },
+                }
+            },
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        if self.version.is_full() && source.version.is_full() {
+            self.version = source.version;
+            unsafe {
+                self.data.value.clone_from(&source.data.value);
+            }
+        } else {
+            *self = source.clone()
+        }
+    }
+}
 
 impl<T: fmt::Debug, V: Version + fmt::Debug> fmt::Debug for Slot<T, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

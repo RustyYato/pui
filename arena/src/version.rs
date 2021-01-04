@@ -13,7 +13,7 @@ pub unsafe trait Version: Copy {
     fn equals_saved(self, saved: Self::Save) -> bool;
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DefaultVersion(u32);
 
 unsafe impl Version for DefaultVersion {
@@ -32,7 +32,7 @@ unsafe impl Version for DefaultVersion {
     fn equals_saved(self, saved: Self::Save) -> bool { self.0 == saved.0 }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TinyVersion(u8);
 
 unsafe impl Version for TinyVersion {
@@ -51,7 +51,7 @@ unsafe impl Version for TinyVersion {
     fn equals_saved(self, saved: Self::Save) -> bool { self.0 == saved.0 }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Unversioned {
     Empty,
     Full,

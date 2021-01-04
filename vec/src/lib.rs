@@ -19,7 +19,7 @@ pub struct Id<T> {
     token: T,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PuiVec<T, I> {
     ident: I,
     vec: Vec<T>,

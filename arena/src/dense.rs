@@ -11,6 +11,7 @@ use crate::{
     version::{DefaultVersion, Version},
 };
 
+#[derive(Clone)]
 pub struct Arena<T, I = (), V: Version = DefaultVersion> {
     slots: SparseArena<usize, I, V>,
     keys: Box<[MaybeUninit<usize>]>,
