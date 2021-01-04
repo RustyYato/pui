@@ -13,7 +13,7 @@ mod pui_vec_index;
 pub use pui_vec_index::{BuildPuiVecIndex, PuiVecAccess, PuiVecIndex};
 
 #[cfg(feature = "pui-core")]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Id<T> {
     index: usize,
     token: T,
