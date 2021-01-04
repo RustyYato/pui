@@ -11,6 +11,8 @@ pub mod base {
     pub mod sparse;
 }
 
+#[cfg(feature = "scoped")]
+pub mod scoped;
 #[cfg(feature = "slab")]
 pub mod slab;
 #[cfg(feature = "slot_map")]
