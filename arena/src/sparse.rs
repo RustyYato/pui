@@ -48,6 +48,10 @@ impl<I> ArenaAccess<I> for usize {
     fn try_remove<T>(&self, arena: &mut Arena<T, I>) -> Option<T> { arena.slots[self].remove(*self, &mut arena.next) }
 }
 
+impl<I> BuildArenaKey<I> for usize {
+    unsafe fn new_unchecked(index: usize, _: u32, _: &I) -> Self { index }
+}
+
 impl<I> ArenaAccess<I> for TrustedIndex {
     fn contained_in<T>(&self, arena: &Arena<T, I>) -> bool { unsafe { arena.slots.get_unchecked(self.0).gen & 1 == 0 } }
 
@@ -60,10 +64,6 @@ impl<I> ArenaAccess<I> for TrustedIndex {
     fn try_remove<T>(&self, arena: &mut Arena<T, I>) -> Option<T> {
         unsafe { arena.slots.get_unchecked_mut(self.0) }.remove(self.0, &mut arena.next)
     }
-}
-
-impl<I> BuildArenaKey<I> for usize {
-    unsafe fn new_unchecked(index: usize, _: u32, _: &I) -> Self { index }
 }
 
 #[cfg(feature = "pui-core")]
