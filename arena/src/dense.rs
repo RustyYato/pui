@@ -5,16 +5,19 @@ use core::{
 
 use std::{boxed::Box, vec::Vec};
 
-use crate::sparse::{Arena as SparseArena, ArenaAccess, BuildArenaKey, VacantEntry as SparseVacantEntry};
+use crate::{
+    sparse::{Arena as SparseArena, ArenaAccess, BuildArenaKey, VacantEntry as SparseVacantEntry},
+    version::{DefaultVersion, Version},
+};
 
-pub struct Arena<T, I = ()> {
-    slots: SparseArena<usize, I>,
+pub struct Arena<T, I = (), V: Version = DefaultVersion> {
+    slots: SparseArena<usize, I, V>,
     keys: Box<[MaybeUninit<usize>]>,
     values: Vec<T>,
 }
 
-pub struct VacantEntry<'a, T, K> {
-    sparse: SparseVacantEntry<'a, usize, K>,
+pub struct VacantEntry<'a, T, K, V: Version = DefaultVersion> {
+    sparse: SparseVacantEntry<'a, usize, K, V>,
     values: &'a mut Vec<T>,
     keys: &'a mut MaybeUninit<usize>,
 }
@@ -23,7 +26,7 @@ impl<T> Arena<T> {
     pub fn new() -> Self { Self::with_ident(()) }
 }
 
-impl<T, I> Arena<T, I> {
+impl<T, I, V: Version> Arena<T, I, V> {
     pub fn with_ident(ident: I) -> Self {
         Self {
             slots: SparseArena::with_ident(ident),
@@ -60,10 +63,10 @@ impl<T, I> Arena<T, I> {
     fn reserve_cold(&mut self, additional: usize) { self.reserve(additional) }
 }
 
-impl<'a, T, I> VacantEntry<'a, T, I> {
-    pub fn key<K: BuildArenaKey<I>>(&self) -> K { self.sparse.key() }
+impl<'a, T, I, V: Version> VacantEntry<'a, T, I, V> {
+    pub fn key<K: BuildArenaKey<I, V>>(&self) -> K { self.sparse.key() }
 
-    pub fn insert<K: BuildArenaKey<I>>(self, value: T) -> K {
+    pub fn insert<K: BuildArenaKey<I, V>>(self, value: T) -> K {
         unsafe {
             let index = self.values.len();
             self.values.as_mut_ptr().add(index).write(value);
@@ -75,12 +78,12 @@ impl<'a, T, I> VacantEntry<'a, T, I> {
     }
 }
 
-impl<T, I> Arena<T, I> {
-    pub fn parse_key<K: BuildArenaKey<I>>(&self, index: usize) -> Option<K> { self.slots.parse_key(index) }
+impl<T, I, V: Version> Arena<T, I, V> {
+    pub fn parse_key<K: BuildArenaKey<I, V>>(&self, index: usize) -> Option<K> { self.slots.parse_key(index) }
 }
 
-impl<T, I> Arena<T, I> {
-    pub fn vacant_entry(&mut self) -> VacantEntry<'_, T, I> {
+impl<T, I, V: Version> Arena<T, I, V> {
+    pub fn vacant_entry(&mut self) -> VacantEntry<'_, T, I, V> {
         let len = self.len();
 
         if len == self.capacity() {
@@ -94,14 +97,14 @@ impl<T, I> Arena<T, I> {
         }
     }
 
-    pub fn insert<K: BuildArenaKey<I>>(&mut self, value: T) -> K { self.vacant_entry().insert(value) }
+    pub fn insert<K: BuildArenaKey<I, V>>(&mut self, value: T) -> K { self.vacant_entry().insert(value) }
 
-    pub fn remove<K: ArenaAccess<I>>(&mut self, key: K) -> T {
+    pub fn remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> T {
         self.try_remove(key)
             .expect("Could not remove form an `Arena` using a stale `Key`")
     }
 
-    pub fn try_remove<K: ArenaAccess<I>>(&mut self, key: K) -> Option<T> {
+    pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> {
         let index = self.slots.try_remove(key)?;
         let value = self.values.swap_remove(index);
 
@@ -124,14 +127,14 @@ impl<T, I> Arena<T, I> {
         Some(value)
     }
 
-    pub fn contains<K: ArenaAccess<I>>(&self, key: K) -> bool { self.slots.contains(key) }
+    pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { self.slots.contains(key) }
 
-    pub fn get<K: ArenaAccess<I>>(&self, key: K) -> Option<&T> {
+    pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> {
         let &slot = self.slots.get(key)?;
         unsafe { Some(self.values.get_unchecked(slot)) }
     }
 
-    pub fn get_mut<K: ArenaAccess<I>>(&mut self, key: K) -> Option<&mut T> {
+    pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> {
         let &slot = self.slots.get(key)?;
         unsafe { Some(self.values.get_unchecked_mut(slot)) }
     }
@@ -142,11 +145,11 @@ impl<T, I> Arena<T, I> {
 
     pub fn into_values(self) -> std::vec::IntoIter<T> { self.values.into_iter() }
 
-    pub fn keys<'a, K: 'a + BuildArenaKey<I>>(&'a self) -> impl 'a + ExactSizeIterator<Item = K> {
+    pub fn keys<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> impl 'a + ExactSizeIterator<Item = K> {
         unsafe { keys(&self.keys, self.values.len(), &self.slots) }
     }
 
-    pub fn entries<'a, K: 'a + BuildArenaKey<I>>(&'a self) -> impl 'a + ExactSizeIterator<Item = (K, &T)> {
+    pub fn entries<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> impl 'a + ExactSizeIterator<Item = (K, &T)> {
         let mut keys = unsafe { keys(&self.keys, self.values.len(), &self.slots) };
         self.values.iter().map(move |value| {
             let key = match keys.next() {
@@ -158,7 +161,9 @@ impl<T, I> Arena<T, I> {
         })
     }
 
-    pub fn entries_mut<'a, K: 'a + BuildArenaKey<I>>(&'a mut self) -> impl 'a + ExactSizeIterator<Item = (K, &mut T)> {
+    pub fn entries_mut<'a, K: 'a + BuildArenaKey<I, V>>(
+        &'a mut self,
+    ) -> impl 'a + ExactSizeIterator<Item = (K, &mut T)> {
         let mut keys = unsafe { keys(&self.keys, self.values.len(), &self.slots) };
         self.values.iter_mut().map(move |value| {
             let key = match keys.next() {
@@ -170,7 +175,7 @@ impl<T, I> Arena<T, I> {
         })
     }
 
-    pub fn into_entries<K: BuildArenaKey<I>>(self) -> impl ExactSizeIterator<Item = (K, T)> {
+    pub fn into_entries<K: BuildArenaKey<I, V>>(self) -> impl ExactSizeIterator<Item = (K, T)> {
         let mut keys = Vec::from(self.keys).into_iter();
         let slots = self.slots;
         self.values.into_iter().map(move |value| {
@@ -189,10 +194,10 @@ impl<T, I> Arena<T, I> {
     }
 }
 
-unsafe fn keys<'a, I, K: BuildArenaKey<I>>(
+unsafe fn keys<'a, I, V: Version, K: BuildArenaKey<I, V>>(
     keys: &'a [MaybeUninit<usize>],
     len: usize,
-    slots: &'a SparseArena<usize, I>,
+    slots: &'a SparseArena<usize, I, V>,
 ) -> impl 'a + ExactSizeIterator<Item = K> {
     let keys = keys.get_unchecked(..len);
     let keys = core::slice::from_raw_parts(keys.as_ptr().cast::<usize>(), keys.len());
@@ -202,19 +207,19 @@ unsafe fn keys<'a, I, K: BuildArenaKey<I>>(
     })
 }
 
-impl<T, I, K: ArenaAccess<I>> Index<K> for Arena<T, I> {
+impl<T, I, V: Version, K: ArenaAccess<I, V>> Index<K> for Arena<T, I, V> {
     type Output = T;
 
     fn index(&self, key: K) -> &Self::Output { self.get(key).expect("Tried to access `Arena` with a stale `Key`") }
 }
 
-impl<T, I, K: ArenaAccess<I>> IndexMut<K> for Arena<T, I> {
+impl<T, I, V: Version, K: ArenaAccess<I, V>> IndexMut<K> for Arena<T, I, V> {
     fn index_mut(&mut self, key: K) -> &mut Self::Output {
         self.get_mut(key).expect("Tried to access `Arena` with a stale `Key`")
     }
 }
 
-impl<T, I> Extend<T> for Arena<T, I> {
+impl<T, I, V: Version> Extend<T> for Arena<T, I, V> {
     fn extend<Iter: IntoIterator<Item = T>>(&mut self, iter: Iter) {
         let iter = iter.into_iter();
         self.reserve(iter.size_hint().0);
@@ -224,7 +229,7 @@ impl<T, I> Extend<T> for Arena<T, I> {
 
 use std::fmt;
 
-impl<T: fmt::Debug, I: fmt::Debug> fmt::Debug for Arena<T, I> {
+impl<T: fmt::Debug, I: fmt::Debug, V: Version + fmt::Debug> fmt::Debug for Arena<T, I, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Arena")
             .field("slots", &self.slots)

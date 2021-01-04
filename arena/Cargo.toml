@@ -8,6 +8,7 @@ edition = "2018"
 
 [features]
 
+default = ['pui']
 pui = ['pui-vec/pui', 'pui-core']
 
 [dependencies]
