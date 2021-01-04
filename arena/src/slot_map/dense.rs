@@ -1,8 +1,10 @@
 use core::ops::{Index, IndexMut};
 
 use crate::{
-    dense::{self as imp, Arena},
-    sparse::Key,
+    base::{
+        dense::{self as imp, Arena},
+        sparse::Key,
+    },
     version::DefaultVersion,
 };
 

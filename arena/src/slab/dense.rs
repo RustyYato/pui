@@ -1,7 +1,7 @@
 use core::ops::{Index, IndexMut};
 
 use crate::{
-    dense::{self as imp, Arena},
+    base::dense::{self as imp, Arena},
     version::Unversioned,
 };
 

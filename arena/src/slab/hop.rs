@@ -1,7 +1,7 @@
 use core::ops::{Index, IndexMut};
 
 use crate::{
-    hop::{self as imp, Arena},
+    base::hop::{self as imp, Arena},
     version::Unversioned,
 };
 

@@ -7,7 +7,7 @@ use core::{
 use std::{boxed::Box, vec::Vec};
 
 use crate::{
-    sparse::{Arena as SparseArena, ArenaAccess, BuildArenaKey, VacantEntry as SparseVacantEntry},
+    base::sparse::{Arena as SparseArena, ArenaAccess, BuildArenaKey, VacantEntry as SparseVacantEntry},
     version::{DefaultVersion, Version},
 };
 
@@ -126,7 +126,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
             *this.cast::<usize>()
         };
 
-        let end = unsafe { crate::sparse::TrustedIndex::new(end) };
+        let end = unsafe { crate::base::sparse::TrustedIndex::new(end) };
 
         // if the last element wasn't removed
         if let Some(end) = self.slots.get_mut(end) {

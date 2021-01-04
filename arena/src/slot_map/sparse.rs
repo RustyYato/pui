@@ -1,7 +1,7 @@
 use core::ops::{Index, IndexMut};
 
 use crate::{
-    sparse::{self as imp, Arena, Key},
+    base::sparse::{self as imp, Arena, Key},
     version::DefaultVersion,
 };
 
