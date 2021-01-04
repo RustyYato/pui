@@ -8,8 +8,9 @@ edition = "2018"
 
 [features]
 
-default = ['pui']
 pui = ['pui-vec/pui', 'pui-core']
+slot_map = []
+slab = []
 
 [dependencies]
 pui-core = { path = '../core', default-features = false, optional = true }

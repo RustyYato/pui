@@ -10,5 +10,7 @@ pub mod base {
     pub mod sparse;
 }
 
+#[cfg(feature = "slab")]
 pub mod slab;
+#[cfg(feature = "slot_map")]
 pub mod slot_map;
