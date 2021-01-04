@@ -190,6 +190,14 @@ pub struct VacantEntry<'a, T, I, V: Version = DefaultVersion> {
     free: FreeNode,
 }
 
+impl<T, V: Version> Drop for Slot<T, V> {
+    fn drop(&mut self) {
+        if self.is_occupied() {
+            unsafe { ManuallyDrop::drop(&mut self.data.value) }
+        }
+    }
+}
+
 impl<T, V: Version> Slot<T, V> {
     fn is_occupied(&self) -> bool { self.version.is_full() }
 
