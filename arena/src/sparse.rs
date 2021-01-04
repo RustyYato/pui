@@ -1,4 +1,5 @@
 use core::{
+    marker::PhantomData,
     mem::{replace, ManuallyDrop},
     ops::{Index, IndexMut},
 };
@@ -255,12 +256,14 @@ impl<T> Default for Arena<T> {
 }
 
 impl<T> Arena<T> {
-    pub fn new() -> Self {
-        Self {
-            slots: PuiVec::new(()),
-            next: 0,
-        }
-    }
+    pub const fn new() -> Self { Self::INIT }
+}
+
+impl<T, V: Version> Arena<T, (), V> {
+    pub const INIT: Self = Self {
+        slots: PuiVec::new(()),
+        next: 0,
+    };
 }
 
 impl<T, I, V: Version> Arena<T, I, V> {
@@ -367,90 +370,70 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> { key.get_mut(self) }
 
-    pub fn keys<K: BuildArenaKey<I, V>>(&self) -> impl '_ + Iterator<Item = K> {
+    pub fn keys<K: BuildArenaKey<I, V>>(&self) -> Keys<'_, T, I, V, K> {
+        Keys {
+            entries: self.entries(),
+        }
+    }
+
+    pub fn values(&self) -> Values<'_, T, V> {
+        Values {
+            slots: Occupied {
+                slots: self.slots.iter(),
+            },
+        }
+    }
+
+    pub fn values_mut(&mut self) -> ValuesMut<'_, T, V> {
+        ValuesMut {
+            slots: Occupied {
+                slots: self.slots.iter_mut(),
+            },
+        }
+    }
+
+    pub fn into_values(self) -> IntoValues<T, V> {
+        IntoValues {
+            slots: Occupied {
+                slots: self.slots.into_raw_parts().1.into_iter(),
+            },
+        }
+    }
+
+    pub fn entries<K: BuildArenaKey<I, V>>(&self) -> Entries<'_, T, I, V, K> {
         let ident = self.ident();
-        self.slots.iter().enumerate().filter_map(move |(index, slot)| {
-            if slot.version.is_full() {
-                Some(unsafe { K::new_unchecked(index, slot.version.save(), ident) })
-            } else {
-                None
-            }
-        })
+
+        Entries {
+            slots: Occupied {
+                slots: self.slots.iter().enumerate(),
+            },
+            ident,
+            key: PhantomData,
+        }
     }
 
-    pub fn values(&self) -> impl '_ + Iterator<Item = &T> {
-        self.slots.iter().filter_map(move |slot| {
-            if slot.version.is_full() {
-                Some(unsafe { &*slot.data.value })
-            } else {
-                None
-            }
-        })
-    }
-
-    pub fn values_mut(&mut self) -> impl '_ + Iterator<Item = &mut T> {
-        self.slots.iter_mut().filter_map(move |slot| {
-            if slot.version.is_full() {
-                Some(unsafe { &mut *slot.data.value })
-            } else {
-                None
-            }
-        })
-    }
-
-    pub fn into_values(self) -> impl Iterator<Item = T> {
-        self.slots.into_iter().filter_map(move |slot| {
-            let mut slot = ManuallyDrop::new(slot);
-            if slot.version.is_full() {
-                Some(unsafe { ManuallyDrop::take(&mut slot.data.value) })
-            } else {
-                None
-            }
-        })
-    }
-
-    pub fn entries<K: BuildArenaKey<I, V>>(&self) -> impl '_ + Iterator<Item = (K, &T)> {
-        let ident = self.ident();
-        self.slots.iter().enumerate().filter_map(move |(index, slot)| {
-            if slot.version.is_full() {
-                Some(unsafe { (K::new_unchecked(index, slot.version.save(), ident), &*slot.data.value) })
-            } else {
-                None
-            }
-        })
-    }
-
-    pub fn entries_mut<K: BuildArenaKey<I, V>>(&mut self) -> impl '_ + Iterator<Item = (K, &mut T)> {
+    pub fn entries_mut<K: BuildArenaKey<I, V>>(&mut self) -> EntriesMut<'_, T, I, V, K> {
         let (ident, slots) = self.slots.as_mut_parts();
-        slots.iter_mut().enumerate().filter_map(move |(index, slot)| {
-            if slot.version.is_full() {
-                Some(unsafe {
-                    (
-                        K::new_unchecked(index, slot.version.save(), ident),
-                        &mut *slot.data.value,
-                    )
-                })
-            } else {
-                None
-            }
-        })
+
+        EntriesMut {
+            slots: Occupied {
+                slots: slots.iter_mut().enumerate(),
+            },
+            ident,
+            key: PhantomData,
+        }
     }
 
-    pub fn into_entries<K: BuildArenaKey<I, V>>(self) -> impl Iterator<Item = (K, T)> {
+    pub fn into_entries<K: BuildArenaKey<I, V>>(self) -> IntoEntries<T, I, V, K> {
         let (ident, slots) = self.slots.into_raw_parts();
-        slots.into_iter().enumerate().filter_map(move |(index, slot)| {
-            let mut slot = ManuallyDrop::new(slot);
-            if slot.version.is_full() {
-                Some(unsafe {
-                    (
-                        K::new_unchecked(index, slot.version.save(), &ident),
-                        ManuallyDrop::take(&mut slot.data.value),
-                    )
-                })
-            } else {
-                None
-            }
-        })
+
+        IntoEntries {
+            slots: Occupied {
+                slots: slots.into_iter().enumerate(),
+            },
+            ident,
+            key: PhantomData,
+        }
     }
 }
 
@@ -489,5 +472,220 @@ impl<T: fmt::Debug, V: Version + fmt::Debug> fmt::Debug for Slot<T, V> {
                 .field("next", unsafe { &self.data.next })
                 .finish()
         }
+    }
+}
+
+struct Occupied<I> {
+    slots: I,
+}
+
+trait AsSlot {
+    type Item;
+    type Version: Version;
+
+    fn as_slot(&self) -> &Slot<Self::Item, Self::Version>;
+}
+
+impl<T, V: Version> AsSlot for Slot<T, V> {
+    type Item = T;
+    type Version = V;
+
+    #[inline]
+    fn as_slot(&self) -> &Slot<Self::Item, Self::Version> { self }
+}
+
+impl<T, V: Version> AsSlot for &mut Slot<T, V> {
+    type Item = T;
+    type Version = V;
+
+    #[inline]
+    fn as_slot(&self) -> &Slot<Self::Item, Self::Version> { self }
+}
+
+impl<T, V: Version> AsSlot for &Slot<T, V> {
+    type Item = T;
+    type Version = V;
+
+    #[inline]
+    fn as_slot(&self) -> &Slot<Self::Item, Self::Version> { self }
+}
+
+impl<T: AsSlot> AsSlot for (usize, T) {
+    type Item = T::Item;
+    type Version = T::Version;
+
+    #[inline]
+    fn as_slot(&self) -> &Slot<Self::Item, Self::Version> { self.1.as_slot() }
+}
+
+impl<I: Iterator> Iterator for Occupied<I>
+where
+    I::Item: AsSlot,
+{
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> { self.slots.by_ref().find(|slot| slot.as_slot().version.is_full()) }
+}
+
+impl<I: DoubleEndedIterator> DoubleEndedIterator for Occupied<I>
+where
+    I::Item: AsSlot,
+{
+    fn next_back(&mut self) -> Option<Self::Item> { self.slots.by_ref().rfind(|slot| slot.as_slot().version.is_full()) }
+}
+
+pub struct Keys<'a, T, I, V: Version, K> {
+    entries: Entries<'a, T, I, V, K>,
+}
+
+impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for Keys<'a, T, I, V, K> {
+    type Item = K;
+
+    fn next(&mut self) -> Option<Self::Item> { self.entries.next().map(|(key, _)| key) }
+}
+
+impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for Keys<'a, T, I, V, K> {
+    fn next_back(&mut self) -> Option<Self::Item> { self.entries.next_back().map(|(key, _)| key) }
+}
+
+pub struct Values<'a, T, V: Version> {
+    slots: Occupied<core::slice::Iter<'a, Slot<T, V>>>,
+}
+
+impl<'a, T, V: Version> Iterator for Values<'a, T, V> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> { self.slots.next().map(|slot| unsafe { &*slot.data.value }) }
+}
+
+impl<T, V: Version> DoubleEndedIterator for Values<'_, T, V> {
+    fn next_back(&mut self) -> Option<Self::Item> { self.slots.next_back().map(|slot| unsafe { &*slot.data.value }) }
+}
+
+pub struct ValuesMut<'a, T, V: Version> {
+    slots: Occupied<core::slice::IterMut<'a, Slot<T, V>>>,
+}
+
+impl<'a, T, V: Version> Iterator for ValuesMut<'a, T, V> {
+    type Item = &'a mut T;
+
+    fn next(&mut self) -> Option<Self::Item> { self.slots.next().map(|slot| unsafe { &mut *slot.data.value }) }
+}
+
+impl<T, V: Version> DoubleEndedIterator for ValuesMut<'_, T, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.slots.next_back().map(|slot| unsafe { &mut *slot.data.value })
+    }
+}
+
+pub struct IntoValues<T, V: Version> {
+    slots: Occupied<std::vec::IntoIter<Slot<T, V>>>,
+}
+
+impl<T, V: Version> Iterator for IntoValues<T, V> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.slots.next().map(|slot| unsafe {
+            let mut slot = ManuallyDrop::new(slot);
+            ManuallyDrop::take(&mut slot.data.value)
+        })
+    }
+}
+
+impl<T, V: Version> DoubleEndedIterator for IntoValues<T, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.slots.next_back().map(|slot| unsafe {
+            let mut slot = ManuallyDrop::new(slot);
+            ManuallyDrop::take(&mut slot.data.value)
+        })
+    }
+}
+
+pub struct Entries<'a, T, I, V: Version, K> {
+    slots: Occupied<core::iter::Enumerate<core::slice::Iter<'a, Slot<T, V>>>>,
+    ident: &'a I,
+    key: PhantomData<fn() -> K>,
+}
+
+impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for Entries<'a, T, I, V, K> {
+    type Item = (K, &'a T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ident = self.ident;
+        self.slots
+            .next()
+            .map(|(index, slot)| unsafe { (K::new_unchecked(index, slot.version.save(), ident), &*slot.data.value) })
+    }
+}
+
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for Entries<'_, T, I, V, K> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let ident = self.ident;
+        self.slots
+            .next_back()
+            .map(|(index, slot)| unsafe { (K::new_unchecked(index, slot.version.save(), ident), &*slot.data.value) })
+    }
+}
+
+pub struct EntriesMut<'a, T, I, V: Version, K> {
+    slots: Occupied<core::iter::Enumerate<core::slice::IterMut<'a, Slot<T, V>>>>,
+    ident: &'a I,
+    key: PhantomData<fn() -> K>,
+}
+
+impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for EntriesMut<'a, T, I, V, K> {
+    type Item = (K, &'a mut T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ident = self.ident;
+        self.slots.next().map(|(index, slot)| unsafe {
+            (
+                K::new_unchecked(index, slot.version.save(), ident),
+                &mut *slot.data.value,
+            )
+        })
+    }
+}
+
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for EntriesMut<'_, T, I, V, K> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let ident = self.ident;
+        self.slots.next_back().map(|(index, slot)| unsafe {
+            (
+                K::new_unchecked(index, slot.version.save(), ident),
+                &mut *slot.data.value,
+            )
+        })
+    }
+}
+
+pub struct IntoEntries<T, I, V: Version, K> {
+    slots: Occupied<core::iter::Enumerate<std::vec::IntoIter<Slot<T, V>>>>,
+    ident: I,
+    key: PhantomData<fn() -> K>,
+}
+
+impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for IntoEntries<T, I, V, K> {
+    type Item = (K, T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ident = &self.ident;
+        self.slots.next().map(|(index, slot)| unsafe {
+            let mut slot = ManuallyDrop::new(slot);
+            let value = ManuallyDrop::take(&mut slot.data.value);
+            (K::new_unchecked(index, slot.version.save(), ident), value)
+        })
+    }
+}
+
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for IntoEntries<T, I, V, K> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let ident = &self.ident;
+        self.slots.next_back().map(|(index, slot)| unsafe {
+            let mut slot = ManuallyDrop::new(slot);
+            let value = ManuallyDrop::take(&mut slot.data.value);
+            (K::new_unchecked(index, slot.version.save(), ident), value)
+        })
     }
 }

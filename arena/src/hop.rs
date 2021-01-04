@@ -478,7 +478,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
-    pub fn entries<K: BuildArenaKey<I, V>>(&self) -> Entries<'_, T, I, K, V> {
+    pub fn entries<K: BuildArenaKey<I, V>>(&self) -> Entries<'_, T, I, V, K> {
         Entries {
             slots: Occupied {
                 range: 1..self.num_elements.wrapping_add(1),
@@ -489,7 +489,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
-    pub fn entries_mut<K: BuildArenaKey<I, V>>(&mut self) -> EntriesMut<'_, T, I, K, V> {
+    pub fn entries_mut<K: BuildArenaKey<I, V>>(&mut self) -> EntriesMut<'_, T, I, V, K> {
         let (ident, slots) = self.slots.as_mut_parts();
         EntriesMut {
             slots: OccupiedMut {
@@ -501,7 +501,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
-    pub fn into_entries<K: BuildArenaKey<I, V>>(self) -> IntoEntries<T, I, K, V> {
+    pub fn into_entries<K: BuildArenaKey<I, V>>(self) -> IntoEntries<T, I, V, K> {
         let (ident, slots) = self.slots.into_raw_parts();
         let mut slots = slots.into_iter();
         core::mem::forget(slots.next());
@@ -650,6 +650,23 @@ where
     }
 }
 
+pub struct Keys<'a, T, I, V: Version, K> {
+    entries: Entries<'a, T, I, V, K>,
+}
+
+impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for Keys<'a, T, I, V, K> {
+    type Item = K;
+
+    fn next(&mut self) -> Option<Self::Item> { self.entries.next().map(|(key, _)| key) }
+
+    fn size_hint(&self) -> (usize, Option<usize>) { self.entries.size_hint() }
+}
+
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for Keys<'_, T, I, V, K> {
+    fn next_back(&mut self) -> Option<Self::Item> { self.entries.next_back().map(|(key, _)| key) }
+}
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for Keys<'_, T, I, V, K> {}
+
 pub struct Values<'a, T, V: Version> {
     slots: Occupied<'a, T, V>,
 }
@@ -715,13 +732,13 @@ impl<T, V: Version> DoubleEndedIterator for IntoValues<T, V> {
 }
 impl<T, V: Version> core::iter::FusedIterator for IntoValues<T, V> {}
 
-pub struct Entries<'a, T, I, K, V: Version> {
+pub struct Entries<'a, T, I, V: Version, K> {
     slots: Occupied<'a, T, V>,
     ident: &'a I,
     key: PhantomData<fn() -> K>,
 }
 
-impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for Entries<'a, T, I, K, V> {
+impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for Entries<'a, T, I, V, K> {
     type Item = (K, &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -734,7 +751,7 @@ impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for Entries<'a, T, I
     fn size_hint(&self) -> (usize, Option<usize>) { self.slots.size_hint() }
 }
 
-impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for Entries<'_, T, I, K, V> {
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for Entries<'_, T, I, V, K> {
     fn next_back(&mut self) -> Option<Self::Item> {
         let ident = self.ident;
         self.slots.next_back().map(move |(index, slot)| unsafe {
@@ -742,15 +759,15 @@ impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for Entries<'
         })
     }
 }
-impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for Entries<'_, T, I, K, V> {}
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for Entries<'_, T, I, V, K> {}
 
-pub struct EntriesMut<'a, T, I, K, V: Version> {
+pub struct EntriesMut<'a, T, I, V: Version, K> {
     slots: OccupiedMut<'a, T, V>,
     ident: &'a I,
     key: PhantomData<fn() -> K>,
 }
 
-impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for EntriesMut<'a, T, I, K, V> {
+impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for EntriesMut<'a, T, I, V, K> {
     type Item = (K, &'a mut T);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -766,7 +783,7 @@ impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for EntriesMut<'a, T
     fn size_hint(&self) -> (usize, Option<usize>) { self.slots.size_hint() }
 }
 
-impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for EntriesMut<'_, T, I, K, V> {
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for EntriesMut<'_, T, I, V, K> {
     fn next_back(&mut self) -> Option<Self::Item> {
         let ident = self.ident;
         self.slots.next_back().map(move |(index, slot)| unsafe {
@@ -777,15 +794,15 @@ impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for EntriesMu
         })
     }
 }
-impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for EntriesMut<'_, T, I, K, V> {}
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for EntriesMut<'_, T, I, V, K> {}
 
-pub struct IntoEntries<T, I, K, V: Version> {
+pub struct IntoEntries<T, I, V: Version, K> {
     slots: IntoOccupied<T, V>,
     ident: I,
     key: PhantomData<fn() -> K>,
 }
 
-impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for IntoEntries<T, I, K, V> {
+impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for IntoEntries<T, I, V, K> {
     type Item = (K, T);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -800,7 +817,7 @@ impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for IntoEntries<T, I
     fn size_hint(&self) -> (usize, Option<usize>) { self.slots.size_hint() }
 }
 
-impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for IntoEntries<T, I, K, V> {
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for IntoEntries<T, I, V, K> {
     fn next_back(&mut self) -> Option<Self::Item> {
         let ident = &self.ident;
         self.slots.next_back().map(move |(index, slot)| unsafe {
@@ -810,4 +827,4 @@ impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for IntoEntri
         })
     }
 }
-impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for IntoEntries<T, I, K, V> {}
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for IntoEntries<T, I, V, K> {}

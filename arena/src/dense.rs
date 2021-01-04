@@ -1,5 +1,6 @@
 use core::{
-    mem::MaybeUninit,
+    marker::PhantomData,
+    mem::{ManuallyDrop, MaybeUninit},
     ops::{Index, IndexMut},
 };
 
@@ -145,52 +146,33 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn into_values(self) -> std::vec::IntoIter<T> { self.values.into_iter() }
 
-    pub fn keys<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> impl 'a + ExactSizeIterator<Item = K> {
+    pub fn keys<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> Keys<'_, I, V, K> {
         unsafe { keys(&self.keys, self.values.len(), &self.slots) }
     }
 
-    pub fn entries<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> impl 'a + ExactSizeIterator<Item = (K, &T)> {
-        let mut keys = unsafe { keys(&self.keys, self.values.len(), &self.slots) };
-        self.values.iter().map(move |value| {
-            let key = match keys.next() {
-                Some(key) => key,
-                None => unsafe { core::hint::unreachable_unchecked() },
-            };
-
-            (key, value)
-        })
+    pub fn into_keys<'a, K: 'a + BuildArenaKey<I, V>>(self) -> IntoKeys<I, V, K> {
+        unsafe { into_keys(self.keys, self.values.len(), self.slots) }
     }
 
-    pub fn entries_mut<'a, K: 'a + BuildArenaKey<I, V>>(
-        &'a mut self,
-    ) -> impl 'a + ExactSizeIterator<Item = (K, &mut T)> {
-        let mut keys = unsafe { keys(&self.keys, self.values.len(), &self.slots) };
-        self.values.iter_mut().map(move |value| {
-            let key = match keys.next() {
-                Some(key) => key,
-                None => unsafe { core::hint::unreachable_unchecked() },
-            };
-
-            (key, value)
-        })
+    pub fn entries<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> Entries<'_, T, I, V, K> {
+        Entries {
+            keys: unsafe { keys(&self.keys, self.values.len(), &self.slots) },
+            values: self.values.iter(),
+        }
     }
 
-    pub fn into_entries<K: BuildArenaKey<I, V>>(self) -> impl ExactSizeIterator<Item = (K, T)> {
-        let mut keys = Vec::from(self.keys).into_iter();
-        let slots = self.slots;
-        self.values.into_iter().map(move |value| {
-            let key = match keys.next() {
-                Some(key) => key,
-                None => unsafe { core::hint::unreachable_unchecked() },
-            };
+    pub fn entries_mut<'a, K: 'a + BuildArenaKey<I, V>>(&'a mut self) -> EntriesMut<'_, T, I, V, K> {
+        EntriesMut {
+            keys: unsafe { keys(&self.keys, self.values.len(), &self.slots) },
+            values: self.values.iter_mut(),
+        }
+    }
 
-            let key = match slots.parse_key(unsafe { key.assume_init() }) {
-                Some(key) => key,
-                None => unsafe { core::hint::unreachable_unchecked() },
-            };
-
-            (key, value)
-        })
+    pub fn into_entries<K: BuildArenaKey<I, V>>(self) -> IntoEntries<T, I, V, K> {
+        IntoEntries {
+            keys: unsafe { into_keys(self.keys, self.values.len(), self.slots) },
+            values: self.values.into_iter(),
+        }
     }
 }
 
@@ -198,13 +180,32 @@ unsafe fn keys<'a, I, V: Version, K: BuildArenaKey<I, V>>(
     keys: &'a [MaybeUninit<usize>],
     len: usize,
     slots: &'a SparseArena<usize, I, V>,
-) -> impl 'a + ExactSizeIterator<Item = K> {
+) -> Keys<'a, I, V, K> {
     let keys = keys.get_unchecked(..len);
     let keys = core::slice::from_raw_parts(keys.as_ptr().cast::<usize>(), keys.len());
-    keys.iter().map(move |&index| match slots.parse_key(index) {
-        Some(index) => index,
-        None => core::hint::unreachable_unchecked(),
-    })
+
+    Keys {
+        keys: keys.iter().copied(),
+        slots,
+        key: PhantomData,
+    }
+}
+
+unsafe fn into_keys<I, V: Version, K: BuildArenaKey<I, V>>(
+    keys: Box<[MaybeUninit<usize>]>,
+    len: usize,
+    slots: SparseArena<usize, I, V>,
+) -> IntoKeys<I, V, K> {
+    let mut keys = ManuallyDrop::new(keys);
+    let cap = keys.len();
+    let keys = keys.as_mut_ptr().cast::<usize>();
+    let keys = std::vec::Vec::from_raw_parts(keys, len, cap);
+
+    IntoKeys {
+        keys: keys.into_iter(),
+        slots,
+        key: PhantomData,
+    }
 }
 
 impl<T, I, V: Version, K: ArenaAccess<I, V>> Index<K> for Arena<T, I, V> {
@@ -237,3 +238,177 @@ impl<T: fmt::Debug, I: fmt::Debug, V: Version + fmt::Debug> fmt::Debug for Arena
             .finish()
     }
 }
+
+macro_rules! keys_impl {
+    () => {
+        type Item = K;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            self.keys.next().map(move |index| {
+                self.slots
+                    .parse_key(index)
+                    .unwrap_or_else(|| unsafe { core::hint::unreachable_unchecked() })
+            })
+        }
+
+        fn nth(&mut self, n: usize) -> Option<Self::Item> {
+            self.keys.nth(n).map(move |index| {
+                self.slots
+                    .parse_key(index)
+                    .unwrap_or_else(|| unsafe { core::hint::unreachable_unchecked() })
+            })
+        }
+
+        fn size_hint(&self) -> (usize, Option<usize>) { self.keys.size_hint() }
+    };
+    (rev) => {
+        fn next_back(&mut self) -> Option<Self::Item> {
+            self.keys.next_back().map(move |index| {
+                self.slots
+                    .parse_key(index)
+                    .unwrap_or_else(|| unsafe { core::hint::unreachable_unchecked() })
+            })
+        }
+
+        fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
+            self.keys.nth_back(n).map(move |index| {
+                self.slots
+                    .parse_key(index)
+                    .unwrap_or_else(|| unsafe { core::hint::unreachable_unchecked() })
+            })
+        }
+    };
+}
+
+pub struct Keys<'a, I, V: Version, K> {
+    keys: core::iter::Copied<core::slice::Iter<'a, usize>>,
+    slots: &'a SparseArena<usize, I, V>,
+    key: PhantomData<fn() -> K>,
+}
+
+impl<'a, I, V: Version, K: BuildArenaKey<I, V>> Iterator for Keys<'a, I, V, K> {
+    keys_impl! {}
+}
+
+impl<I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for Keys<'_, I, V, K> {
+    keys_impl! { rev }
+}
+
+impl<I, V: Version, K: BuildArenaKey<I, V>> ExactSizeIterator for Keys<'_, I, V, K> {}
+impl<I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for Keys<'_, I, V, K> {}
+
+pub struct IntoKeys<I, V: Version, K> {
+    keys: std::vec::IntoIter<usize>,
+    slots: SparseArena<usize, I, V>,
+    key: PhantomData<fn() -> K>,
+}
+
+impl<'a, I, V: Version, K: BuildArenaKey<I, V>> Iterator for IntoKeys<I, V, K> {
+    keys_impl! {}
+}
+
+impl<I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for IntoKeys<I, V, K> {
+    keys_impl! { rev }
+}
+
+impl<I, V: Version, K: BuildArenaKey<I, V>> ExactSizeIterator for IntoKeys<I, V, K> {}
+impl<I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for IntoKeys<I, V, K> {}
+
+macro_rules! entry_impl {
+    () => {
+        fn next(&mut self) -> Option<Self::Item> {
+            self.keys.next().map(move |key| {
+                let value = self
+                    .values
+                    .next()
+                    .unwrap_or_else(|| unsafe { core::hint::unreachable_unchecked() });
+                (key, value)
+            })
+        }
+
+        fn nth(&mut self, n: usize) -> Option<Self::Item> {
+            self.keys.nth(n).map(move |key| {
+                let value = self
+                    .values
+                    .nth(n)
+                    .unwrap_or_else(|| unsafe { core::hint::unreachable_unchecked() });
+                (key, value)
+            })
+        }
+
+        fn size_hint(&self) -> (usize, Option<usize>) { self.keys.size_hint() }
+    };
+    (rev) => {
+        fn next_back(&mut self) -> Option<Self::Item> {
+            self.keys.next_back().map(move |key| {
+                let value = self
+                    .values
+                    .next_back()
+                    .unwrap_or_else(|| unsafe { core::hint::unreachable_unchecked() });
+                (key, value)
+            })
+        }
+
+        fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
+            self.keys.nth_back(n).map(move |key| {
+                let value = self
+                    .values
+                    .nth_back(n)
+                    .unwrap_or_else(|| unsafe { core::hint::unreachable_unchecked() });
+                (key, value)
+            })
+        }
+    };
+}
+
+pub struct Entries<'a, T, I, V: Version, K> {
+    values: core::slice::Iter<'a, T>,
+    keys: Keys<'a, I, V, K>,
+}
+
+impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for Entries<'a, T, I, V, K> {
+    type Item = (K, &'a T);
+
+    entry_impl! {}
+}
+
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for Entries<'_, T, I, V, K> {
+    entry_impl! { rev }
+}
+
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> ExactSizeIterator for Entries<'_, T, I, V, K> {}
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for Entries<'_, T, I, V, K> {}
+
+pub struct EntriesMut<'a, T, I, V: Version, K> {
+    values: core::slice::IterMut<'a, T>,
+    keys: Keys<'a, I, V, K>,
+}
+
+impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for EntriesMut<'a, T, I, V, K> {
+    type Item = (K, &'a mut T);
+
+    entry_impl! {}
+}
+
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for EntriesMut<'_, T, I, V, K> {
+    entry_impl! { rev }
+}
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> ExactSizeIterator for EntriesMut<'_, T, I, V, K> {}
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for EntriesMut<'_, T, I, V, K> {}
+
+pub struct IntoEntries<T, I, V: Version, K> {
+    values: std::vec::IntoIter<T>,
+    keys: IntoKeys<I, V, K>,
+}
+
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> Iterator for IntoEntries<T, I, V, K> {
+    type Item = (K, T);
+
+    entry_impl! {}
+}
+
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for IntoEntries<T, I, V, K> {
+    entry_impl! { rev }
+}
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> ExactSizeIterator for IntoEntries<T, I, V, K> {}
+impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for IntoEntries<T, I, V, K> {}
