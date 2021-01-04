@@ -161,10 +161,8 @@ pub struct Arena<T, I = ()> {
     next: usize,
 }
 
-pub struct VacantEntry<'a, T, K> {
-    key: K,
-    slot: &'a mut Slot<T>,
-    next: &'a mut usize,
+pub struct VacantEntry<'a, T, I> {
+    arena: &'a mut Arena<T, I>,
     new_next: usize,
 }
 
@@ -215,9 +213,11 @@ impl<T> Slot<T> {
         if self.gen == gen {
             self.gen |= 1;
             let value = unsafe { ManuallyDrop::take(&mut self.data.value) };
-            self.data = Data {
-                next: replace(next, index),
-            };
+            if self.gen != u32::MAX {
+                self.data = Data {
+                    next: replace(next, index),
+                };
+            }
             Some(value)
         } else {
             None
@@ -261,16 +261,28 @@ impl<Id> Key<Id> {
     pub fn generation(&self) -> u32 { self.gen }
 }
 
-impl<T, K> VacantEntry<'_, T, K> {
-    pub fn key(&self) -> &K { &self.key }
+impl<T, I> VacantEntry<'_, T, I> {
+    pub fn key<K: BuildArenaKey<I>>(&self) -> K {
+        unsafe {
+            K::new_unchecked(
+                self.arena.next,
+                self.arena.slots.get_unchecked(self.arena.next).gen.wrapping_add(1),
+                self.arena.ident(),
+            )
+        }
+    }
 
-    pub fn insert(self, value: T) -> K {
-        self.slot.data = Data {
+    pub fn insert<K: BuildArenaKey<I>>(self, value: T) -> K {
+        let slot = unsafe { self.arena.slots.get_unchecked_mut(self.arena.next) };
+        slot.data = Data {
             value: ManuallyDrop::new(value),
         };
-        self.slot.gen = self.slot.gen.wrapping_add(1);
-        *self.next = self.new_next;
-        self.key
+        slot.gen = slot.gen.wrapping_add(1);
+        let gen = slot.gen;
+        let index = self.arena.next;
+        self.arena.next = self.new_next;
+
+        unsafe { K::new_unchecked(index, gen, self.arena.ident()) }
     }
 }
 
@@ -287,7 +299,7 @@ impl<T, I> Arena<T, I> {
 }
 
 impl<T, I> Arena<T, I> {
-    pub fn vacant_entry<K: BuildArenaKey<I>>(&mut self) -> VacantEntry<'_, T, K> {
+    pub fn vacant_entry(&mut self) -> VacantEntry<'_, T, I> {
         #[cold]
         #[inline(never)]
         pub fn allocate_vacant_slot<T, I>(this: &mut Arena<T, I>) {
@@ -300,32 +312,15 @@ impl<T, I> Arena<T, I> {
             });
         }
 
-        let len = self.slots.len();
-        'find_vacant_slot: loop {
-            while len != self.next {
-                let slot = unsafe { self.slots.get_unchecked(self.next) };
-
-                if slot.gen != u32::MAX - 2 {
-                    break 'find_vacant_slot
-                }
-
-                self.next = unsafe { slot.data.next }
-            }
-
+        if self.slots.len() == self.next {
             allocate_vacant_slot(self);
-
-            break 'find_vacant_slot
         }
 
-        let slot = unsafe { self.slots.get_unchecked(self.next) };
-        let key = unsafe { K::new_unchecked(self.next, slot.gen.wrapping_add(1), self.slots.ident()) };
         let slot = unsafe { self.slots.get_unchecked_mut(self.next) };
 
         VacantEntry {
             new_next: unsafe { slot.data.next },
-            next: &mut self.next,
-            slot,
-            key,
+            arena: self,
         }
     }
 

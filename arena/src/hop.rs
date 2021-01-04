@@ -282,38 +282,31 @@ impl<T, I> Arena<T, I> {
             arena.freelist(0).next = index;
         }
 
-        loop {
-            unsafe {
-                let head = self.freelist(0).next;
+        unsafe {
+            let head = self.freelist(0).next;
 
-                if head == 0 {
-                    // if there are no elements in the freelist
+            if head == 0 {
+                // if there are no elements in the freelist
 
-                    let index = self.slots.len();
-                    allocate_new_node(self, index);
+                let index = self.slots.len();
+                allocate_new_node(self, index);
 
-                    return VacantEntry {
-                        arena: self,
-                        index,
-                        updated_gen: 1,
-                        free: FreeNode {
-                            next: 0,
-                            prev: 0,
-                            end: index,
-                        },
-                    }
+                VacantEntry {
+                    arena: self,
+                    index,
+                    updated_gen: 1,
+                    free: FreeNode {
+                        next: 0,
+                        prev: 0,
+                        end: index,
+                    },
                 }
-
+            } else {
                 let slot = self.slots.get_unchecked_mut(head);
                 let updated_gen = slot.gen | 1;
                 let free = slot.data.free;
 
-                if updated_gen == u32::MAX {
-                    self.remove_slot_from_freelist_cold(head, free);
-                    continue
-                }
-
-                return VacantEntry {
+                VacantEntry {
                     arena: self,
                     index: head,
                     updated_gen,
@@ -336,12 +329,6 @@ impl<T, I> Arena<T, I> {
         Some(value)
     }
 
-    #[cold]
-    #[inline(never)]
-    unsafe fn remove_slot_from_freelist_cold(&mut self, index: usize, free: FreeNode) {
-        self.remove_slot_from_freelist(index, free)
-    }
-
     #[inline(always)]
     unsafe fn remove_slot_from_freelist(&mut self, index: usize, free: FreeNode) {
         if free.end != index {
@@ -362,6 +349,18 @@ impl<T, I> Arena<T, I> {
     }
 
     unsafe fn insert_slot_into_freelist(&mut self, index: usize) {
+        let slot = self.slots.get_unchecked_mut(index);
+        if slot.gen == 0 {
+            // this slot has exhausted it's generation counter, so
+            // omit it from the freelist and it will never be used again
+
+            // this is works with iteration because iteration always checks
+            // if the current slot is vacant, and then accesses `free.end`
+            slot.data.free.end = index;
+
+            return
+        }
+
         let is_left_vacant = self.slots.get_unchecked(index.wrapping_sub(1)).is_vacant();
         let is_right_vacant = self.slots.get(index.wrapping_add(1)).map_or(false, Slot::is_vacant);
 

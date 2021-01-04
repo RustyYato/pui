@@ -60,10 +60,10 @@ impl<T, I> Arena<T, I> {
     fn reserve_cold(&mut self, additional: usize) { self.reserve(additional) }
 }
 
-impl<'a, T, K> VacantEntry<'a, T, K> {
-    pub fn key(&self) -> &K { self.sparse.key() }
+impl<'a, T, I> VacantEntry<'a, T, I> {
+    pub fn key<K: BuildArenaKey<I>>(&self) -> K { self.sparse.key() }
 
-    pub fn insert(self, value: T) -> K {
+    pub fn insert<K: BuildArenaKey<I>>(self, value: T) -> K {
         unsafe {
             let index = self.values.len();
             self.values.as_mut_ptr().add(index).write(value);
@@ -80,7 +80,7 @@ impl<T, I> Arena<T, I> {
 }
 
 impl<T, I> Arena<T, I> {
-    pub fn vacant_entry<K: BuildArenaKey<I>>(&mut self) -> VacantEntry<'_, T, K> {
+    pub fn vacant_entry(&mut self) -> VacantEntry<'_, T, I> {
         let len = self.len();
 
         if len == self.capacity() {
