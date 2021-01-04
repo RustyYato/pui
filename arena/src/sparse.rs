@@ -8,6 +8,7 @@ use pui_vec::PuiVec;
 
 use crate::version::{DefaultVersion, Version};
 
+#[derive(Clone, Copy)]
 pub(crate) struct TrustedIndex(usize);
 
 impl TrustedIndex {
@@ -264,6 +265,11 @@ impl<T, V: Version> Arena<T, (), V> {
         slots: PuiVec::new(()),
         next: 0,
     };
+
+    pub fn clear(&mut self) {
+        self.next = 0;
+        self.slots.vec_mut().clear();
+    }
 }
 
 impl<T, I, V: Version> Arena<T, I, V> {
@@ -369,6 +375,21 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> { key.get(self) }
 
     pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> { key.get_mut(self) }
+
+    pub fn remove_all(&mut self) { self.retain(|_| false) }
+
+    pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
+        for i in 0..self.slots.len() {
+            match TrustedIndex(i).get_mut(self) {
+                Some(value) => unsafe {
+                    if !f(value) {
+                        self.slots.get_unchecked_mut(i).remove_unchecked(i, &mut self.next);
+                    }
+                },
+                _ => (),
+            }
+        }
+    }
 
     pub fn keys<K: BuildArenaKey<I, V>>(&self) -> Keys<'_, T, I, V, K> {
         Keys {
@@ -478,7 +499,9 @@ impl<T: Clone, V: Version> Clone for Slot<T, V> {
     fn clone_from(&mut self, source: &Self) {
         if self.version.is_full() && source.version.is_full() {
             self.version = source.version;
-            unsafe { self.data.value.clone_from(&source.data.value); }
+            unsafe {
+                self.data.value.clone_from(&source.data.value);
+            }
         } else {
             *self = source.clone()
         }

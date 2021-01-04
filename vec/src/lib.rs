@@ -58,6 +58,10 @@ impl<T, I> PuiVec<T, I> {
     pub fn into_raw_parts(self) -> (I, Vec<T>) { (self.ident, self.vec) }
 }
 
+impl<T> PuiVec<T, ()> {
+    pub fn vec_mut(&mut self) -> &mut Vec<T> { &mut self.vec }
+}
+
 impl<T, I> PuiVec<T, I> {
     pub fn push<Id: BuildPuiVecIndex<I, SliceIndex = usize>>(&mut self, value: T) -> Id {
         let index = self.vec.len();

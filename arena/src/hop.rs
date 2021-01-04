@@ -199,6 +199,17 @@ impl<T, V: Version> Drop for Slot<T, V> {
 }
 
 impl<T, V: Version> Slot<T, V> {
+    const SENTINEL: Self = Slot {
+        version: V::EMPTY,
+        data: Data {
+            free: FreeNode {
+                next: 0,
+                prev: 0,
+                end: 0,
+            },
+        },
+    };
+
     fn is_occupied(&self) -> bool { self.version.is_full() }
 
     fn is_vacant(&self) -> bool { !self.is_occupied() }
@@ -257,23 +268,18 @@ impl<T> Arena<T> {
     pub fn new() -> Self { Self::with_ident(()) }
 }
 
+impl<T, V: Version> Arena<T, (), V> {
+    pub fn clear(&mut self) {
+        self.slots.vec_mut().clear();
+        let _: usize = self.slots.push(Slot::SENTINEL);
+    }
+}
+
 impl<T, I, V: Version> Arena<T, I, V> {
     pub fn with_ident(ident: I) -> Self {
         Self {
             num_elements: 0,
-            slots: PuiVec::from_raw_parts(
-                std::vec![Slot {
-                    version: V::EMPTY,
-                    data: Data {
-                        free: FreeNode {
-                            next: 0,
-                            prev: 0,
-                            end: 0,
-                        },
-                    },
-                }],
-                ident,
-            ),
+            slots: PuiVec::from_raw_parts(std::vec![Slot::SENTINEL], ident),
         }
     }
 
@@ -455,6 +461,24 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> { key.get(self) }
 
     pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> { key.get_mut(self) }
+
+    pub fn remove_all(&mut self) { self.retain(|_| false) }
+
+    pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
+        let mut i = 0;
+        let end = self.slots.len();
+        while i != end {
+            match unsafe { self.slots.get_unchecked_mut(i).get_mut() } {
+                Some(value) => unsafe {
+                    if !f(value) {
+                        self.remove_unchecked(i);
+                    }
+                },
+                None => i = unsafe { self.freelist(i).end },
+            }
+            i += 1;
+        }
+    }
 
     pub fn values(&self) -> Values<'_, T, V> {
         Values {

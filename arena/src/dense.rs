@@ -28,6 +28,13 @@ impl<T> Arena<T> {
     pub fn new() -> Self { Self::with_ident(()) }
 }
 
+impl<T, V: Version> Arena<T, (), V> {
+    pub fn clear(&mut self) {
+        self.slots.clear();
+        self.values.clear();
+    }
+}
+
 impl<T, I, V: Version> Arena<T, I, V> {
     pub fn with_ident(ident: I) -> Self {
         Self {
@@ -139,6 +146,21 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> {
         let &slot = self.slots.get(key)?;
         unsafe { Some(self.values.get_unchecked_mut(slot)) }
+    }
+
+    pub fn remove_all(&mut self) {
+        self.slots.remove_all();
+        self.values.clear();
+    }
+
+    pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
+        for i in (0..self.values.len()).rev() {
+            let value = unsafe { self.values.get_unchecked_mut(i) };
+
+            if !f(value) {
+                self.try_remove(i);
+            }
+        }
     }
 
     pub fn values(&self) -> core::slice::Iter<'_, T> { self.values.iter() }
