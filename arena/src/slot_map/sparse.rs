@@ -5,9 +5,9 @@ use crate::{
     version::DefaultVersion,
 };
 
-pub type Iter<'a, T> = imp::Values<'a, T, DefaultVersion>;
-pub type IterMut<'a, T> = imp::ValuesMut<'a, T, DefaultVersion>;
-pub type IntoIter<T> = imp::IntoValues<T, DefaultVersion>;
+pub type Iter<'a, T> = imp::Iter<'a, T, DefaultVersion>;
+pub type IterMut<'a, T> = imp::IterMut<'a, T, DefaultVersion>;
+pub type IntoIter<T> = imp::IntoIter<T, DefaultVersion>;
 
 imp_slot_map! {
     new const: Arena::INIT,

@@ -163,11 +163,9 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
-    pub fn values(&self) -> core::slice::Iter<'_, T> { self.values.iter() }
+    pub fn iter(&self) -> core::slice::Iter<'_, T> { self.values.iter() }
 
-    pub fn values_mut(&mut self) -> core::slice::IterMut<'_, T> { self.values.iter_mut() }
-
-    pub fn into_values(self) -> std::vec::IntoIter<T> { self.values.into_iter() }
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> { self.values.iter_mut() }
 
     pub fn keys<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> Keys<'_, I, V, K> {
         unsafe { keys(&self.keys, self.values.len(), &self.slots) }
@@ -180,21 +178,21 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn entries<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> Entries<'_, T, I, V, K> {
         Entries {
             keys: unsafe { keys(&self.keys, self.values.len(), &self.slots) },
-            values: self.values.iter(),
+            iter: self.values.iter(),
         }
     }
 
     pub fn entries_mut<'a, K: 'a + BuildArenaKey<I, V>>(&'a mut self) -> EntriesMut<'_, T, I, V, K> {
         EntriesMut {
             keys: unsafe { keys(&self.keys, self.values.len(), &self.slots) },
-            values: self.values.iter_mut(),
+            iter: self.values.iter_mut(),
         }
     }
 
     pub fn into_entries<K: BuildArenaKey<I, V>>(self) -> IntoEntries<T, I, V, K> {
         IntoEntries {
             keys: unsafe { into_keys(self.keys, self.values.len(), self.slots) },
-            values: self.values.into_iter(),
+            iter: self.values.into_iter(),
         }
     }
 }
@@ -229,6 +227,13 @@ unsafe fn into_keys<I, V: Version, K: BuildArenaKey<I, V>>(
         slots,
         key: PhantomData,
     }
+}
+
+impl<T, I, V: Version> IntoIterator for Arena<T, I, V> {
+    type Item = T;
+    type IntoIter = std::vec::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter { self.values.into_iter() }
 }
 
 impl<T, I, V: Version, K: ArenaAccess<I, V>> Index<K> for Arena<T, I, V> {
@@ -341,7 +346,7 @@ macro_rules! entry_impl {
     () => {
         fn next(&mut self) -> Option<Self::Item> {
             self.keys.next().map(move |key| {
-                let value = match self.values.next() {
+                let value = match self.iter.next() {
                     Some(item) => item,
                     None => unsafe { core::hint::unreachable_unchecked() },
                 };
@@ -351,7 +356,7 @@ macro_rules! entry_impl {
 
         fn nth(&mut self, n: usize) -> Option<Self::Item> {
             self.keys.nth(n).map(move |key| {
-                let value = match self.values.nth(n) {
+                let value = match self.iter.nth(n) {
                     Some(item) => item,
                     None => unsafe { core::hint::unreachable_unchecked() },
                 };
@@ -364,7 +369,7 @@ macro_rules! entry_impl {
     (rev) => {
         fn next_back(&mut self) -> Option<Self::Item> {
             self.keys.next_back().map(move |key| {
-                let value = match self.values.next_back() {
+                let value = match self.iter.next_back() {
                     Some(item) => item,
                     None => unsafe { core::hint::unreachable_unchecked() },
                 };
@@ -374,7 +379,7 @@ macro_rules! entry_impl {
 
         fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
             self.keys.nth_back(n).map(move |key| {
-                let value = match self.values.nth_back(n) {
+                let value = match self.iter.nth_back(n) {
                     Some(item) => item,
                     None => unsafe { core::hint::unreachable_unchecked() },
                 };
@@ -385,7 +390,7 @@ macro_rules! entry_impl {
 }
 
 pub struct Entries<'a, T, I, V: Version, K> {
-    values: core::slice::Iter<'a, T>,
+    iter: core::slice::Iter<'a, T>,
     keys: Keys<'a, I, V, K>,
 }
 
@@ -403,7 +408,7 @@ impl<T, I, V: Version, K: BuildArenaKey<I, V>> ExactSizeIterator for Entries<'_,
 impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for Entries<'_, T, I, V, K> {}
 
 pub struct EntriesMut<'a, T, I, V: Version, K> {
-    values: core::slice::IterMut<'a, T>,
+    iter: core::slice::IterMut<'a, T>,
     keys: Keys<'a, I, V, K>,
 }
 
@@ -420,7 +425,7 @@ impl<T, I, V: Version, K: BuildArenaKey<I, V>> ExactSizeIterator for EntriesMut<
 impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for EntriesMut<'_, T, I, V, K> {}
 
 pub struct IntoEntries<T, I, V: Version, K> {
-    values: std::vec::IntoIter<T>,
+    iter: std::vec::IntoIter<T>,
     keys: IntoKeys<I, V, K>,
 }
 

@@ -43,8 +43,8 @@ macro_rules! imp_scoped {
             pub fn remove_all(&mut self) { self.0.remove_all() }
             pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, f: F) { self.0.retain(f) }
             pub fn keys(&self) -> Keys<'_, 'scope $(, $keys)?, V> { self.0.keys() }
-            pub fn iter(&self) -> Iter<'_, T $(, $version)?> { self.0.values() }
-            pub fn iter_mut(&mut self) -> IterMut<'_, T $(, $version)?> { self.0.values_mut() }
+            pub fn iter(&self) -> Iter<'_, T $(, $version)?> { self.0.iter() }
+            pub fn iter_mut(&mut self) -> IterMut<'_, T $(, $version)?> { self.0.iter_mut() }
             pub fn entries(&self) -> Entries<'_, 'scope, T, V> { self.0.entries() }
             pub fn entries_mut(&mut self) -> EntriesMut<'_, 'scope, T, V> { self.0.entries_mut() }
             pub fn into_entries(self) -> IntoEntries<'scope, T, V> { self.0.into_entries() }
@@ -54,7 +54,7 @@ macro_rules! imp_scoped {
             type IntoIter = IntoIter<T $(, $version)?>;
             type Item = T;
 
-            fn into_iter(self) -> Self::IntoIter { self.0.into_values() }
+            fn into_iter(self) -> Self::IntoIter { self.0.into_iter() }
         }
 
         impl<'scope, T, V: crate::version::Version> Index<Key<'scope, V>> for Arena<'scope, T, V> {
@@ -73,9 +73,9 @@ macro_rules! imp_scoped {
             use crate::base::sparse as imp;
             use crate::base::sparse as key;
 
-            pub type Iter<'a, T, V = crate::version::DefaultVersion> = imp::Values<'a, T, V>;
-            pub type IterMut<'a, T, V = crate::version::DefaultVersion> = imp::ValuesMut<'a, T, V>;
-            pub type IntoIter<T, V = crate::version::DefaultVersion> = imp::IntoValues<T, V>;
+            pub type Iter<'a, T, V = crate::version::DefaultVersion> = imp::Iter<'a, T, V>;
+            pub type IterMut<'a, T, V = crate::version::DefaultVersion> = imp::IterMut<'a, T, V>;
+            pub type IntoIter<T, V = crate::version::DefaultVersion> = imp::IntoIter<T, V>;
 
             pub type Keys<'a, 'scope, T, V = crate::version::DefaultVersion> = imp::Keys<'a, T, pui_core::scoped::Scoped<'scope>, V, Key<'scope, V>>;
 
@@ -92,9 +92,9 @@ macro_rules! imp_scoped {
             use crate::base::hop as imp;
             use crate::base::hop as key;
 
-            pub type Iter<'a, T, V = crate::version::DefaultVersion> = imp::Values<'a, T, V>;
-            pub type IterMut<'a, T, V = crate::version::DefaultVersion> = imp::ValuesMut<'a, T, V>;
-            pub type IntoIter<T, V = crate::version::DefaultVersion> = imp::IntoValues<T, V>;
+            pub type Iter<'a, T, V = crate::version::DefaultVersion> = imp::Iter<'a, T, V>;
+            pub type IterMut<'a, T, V = crate::version::DefaultVersion> = imp::IterMut<'a, T, V>;
+            pub type IntoIter<T, V = crate::version::DefaultVersion> = imp::IntoIter<T, V>;
 
             pub type Keys<'a, 'scope, T, V = crate::version::DefaultVersion> = imp::Keys<'a, T, pui_core::scoped::Scoped<'scope>, V, Key<'scope, V>>;
 

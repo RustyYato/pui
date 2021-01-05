@@ -397,26 +397,18 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
-    pub fn values(&self) -> Values<'_, T, V> {
-        Values {
+    pub fn iter(&self) -> Iter<'_, T, V> {
+        Iter {
             slots: Occupied {
                 slots: self.slots.iter(),
             },
         }
     }
 
-    pub fn values_mut(&mut self) -> ValuesMut<'_, T, V> {
-        ValuesMut {
+    pub fn iter_mut(&mut self) -> IterMut<'_, T, V> {
+        IterMut {
             slots: Occupied {
                 slots: self.slots.iter_mut(),
-            },
-        }
-    }
-
-    pub fn into_values(self) -> IntoValues<T, V> {
-        IntoValues {
-            slots: Occupied {
-                slots: self.slots.into_raw_parts().1.into_iter(),
             },
         }
     }
@@ -454,6 +446,19 @@ impl<T, I, V: Version> Arena<T, I, V> {
             },
             ident,
             key: PhantomData,
+        }
+    }
+}
+
+impl<T, I, V: Version> IntoIterator for Arena<T, I, V> {
+    type Item = T;
+    type IntoIter = IntoIter<T, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter {
+            slots: Occupied {
+                slots: self.slots.into_raw_parts().1.into_iter(),
+            },
         }
     }
 }
@@ -597,41 +602,41 @@ impl<'a, T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for Keys<
     fn next_back(&mut self) -> Option<Self::Item> { self.entries.next_back().map(|(key, _)| key) }
 }
 
-pub struct Values<'a, T, V: Version> {
+pub struct Iter<'a, T, V: Version> {
     slots: Occupied<core::slice::Iter<'a, Slot<T, V>>>,
 }
 
-impl<'a, T, V: Version> Iterator for Values<'a, T, V> {
+impl<'a, T, V: Version> Iterator for Iter<'a, T, V> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> { self.slots.next().map(|slot| unsafe { &*slot.data.value }) }
 }
 
-impl<T, V: Version> DoubleEndedIterator for Values<'_, T, V> {
+impl<T, V: Version> DoubleEndedIterator for Iter<'_, T, V> {
     fn next_back(&mut self) -> Option<Self::Item> { self.slots.next_back().map(|slot| unsafe { &*slot.data.value }) }
 }
 
-pub struct ValuesMut<'a, T, V: Version> {
+pub struct IterMut<'a, T, V: Version> {
     slots: Occupied<core::slice::IterMut<'a, Slot<T, V>>>,
 }
 
-impl<'a, T, V: Version> Iterator for ValuesMut<'a, T, V> {
+impl<'a, T, V: Version> Iterator for IterMut<'a, T, V> {
     type Item = &'a mut T;
 
     fn next(&mut self) -> Option<Self::Item> { self.slots.next().map(|slot| unsafe { &mut *slot.data.value }) }
 }
 
-impl<T, V: Version> DoubleEndedIterator for ValuesMut<'_, T, V> {
+impl<T, V: Version> DoubleEndedIterator for IterMut<'_, T, V> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.slots.next_back().map(|slot| unsafe { &mut *slot.data.value })
     }
 }
 
-pub struct IntoValues<T, V: Version> {
+pub struct IntoIter<T, V: Version> {
     slots: Occupied<std::vec::IntoIter<Slot<T, V>>>,
 }
 
-impl<T, V: Version> Iterator for IntoValues<T, V> {
+impl<T, V: Version> Iterator for IntoIter<T, V> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -642,7 +647,7 @@ impl<T, V: Version> Iterator for IntoValues<T, V> {
     }
 }
 
-impl<T, V: Version> DoubleEndedIterator for IntoValues<T, V> {
+impl<T, V: Version> DoubleEndedIterator for IntoIter<T, V> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.slots.next_back().map(|slot| unsafe {
             let mut slot = ManuallyDrop::new(slot);

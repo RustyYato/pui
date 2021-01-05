@@ -495,8 +495,8 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
-    pub fn values(&self) -> Values<'_, T, V> {
-        Values {
+    pub fn iter(&self) -> Iter<'_, T, V> {
+        Iter {
             slots: Occupied {
                 len: self.num_elements,
                 slots: iter_unchecked::Iter::new(&self.slots).enumerate(),
@@ -504,21 +504,11 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
-    pub fn values_mut(&mut self) -> ValuesMut<'_, T, V> {
-        ValuesMut {
+    pub fn iter_mut(&mut self) -> IterMut<'_, T, V> {
+        IterMut {
             slots: OccupiedMut {
                 len: self.num_elements,
                 slots: iter_unchecked::IterMut::new(&mut self.slots).enumerate(),
-            },
-        }
-    }
-
-    pub fn into_values(self) -> IntoValues<T, V> {
-        let (_, slots) = self.slots.into_raw_parts();
-        IntoValues {
-            slots: IntoOccupied {
-                len: self.num_elements,
-                slots: iter_unchecked::IntoIter::new(slots).enumerate(),
             },
         }
     }
@@ -555,6 +545,20 @@ impl<T, I, V: Version> Arena<T, I, V> {
             },
             ident,
             key: PhantomData,
+        }
+    }
+}
+
+impl<T, I, V: Version> IntoIterator for Arena<T, I, V> {
+    type Item = T;
+    type IntoIter = IntoIter<T, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter {
+            slots: IntoOccupied {
+                len: self.num_elements,
+                slots: iter_unchecked::IntoIter::new(self.slots.into_raw_parts().1).enumerate(),
+            },
         }
     }
 }
@@ -698,11 +702,11 @@ unsafe fn entry<I, V: Version, T, K: BuildArenaKey<I, V>>(ident: &I) -> impl '_ 
     move |(index, (version, value))| (K::new_unchecked(index, version.save(), ident), value)
 }
 
-pub struct Values<'a, T, V: Version> {
+pub struct Iter<'a, T, V: Version> {
     slots: Occupied<'a, T, V>,
 }
 
-impl<'a, T, V: Version> Iterator for Values<'a, T, V> {
+impl<'a, T, V: Version> Iterator for Iter<'a, T, V> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> { self.slots.next().map(value) }
@@ -714,17 +718,17 @@ impl<'a, T, V: Version> Iterator for Values<'a, T, V> {
     fn count(self) -> usize { self.slots.count() }
 }
 
-impl<T, V: Version> DoubleEndedIterator for Values<'_, T, V> {
+impl<T, V: Version> DoubleEndedIterator for Iter<'_, T, V> {
     fn next_back(&mut self) -> Option<Self::Item> { self.slots.next_back().map(value) }
 }
-impl<T, V: Version> ExactSizeIterator for Values<'_, T, V> {}
-impl<T, V: Version> core::iter::FusedIterator for Values<'_, T, V> {}
+impl<T, V: Version> ExactSizeIterator for Iter<'_, T, V> {}
+impl<T, V: Version> core::iter::FusedIterator for Iter<'_, T, V> {}
 
-pub struct ValuesMut<'a, T, V: Version> {
+pub struct IterMut<'a, T, V: Version> {
     slots: OccupiedMut<'a, T, V>,
 }
 
-impl<'a, T, V: Version> Iterator for ValuesMut<'a, T, V> {
+impl<'a, T, V: Version> Iterator for IterMut<'a, T, V> {
     type Item = &'a mut T;
 
     fn next(&mut self) -> Option<Self::Item> { self.slots.next().map(value) }
@@ -736,17 +740,17 @@ impl<'a, T, V: Version> Iterator for ValuesMut<'a, T, V> {
     fn count(self) -> usize { self.slots.count() }
 }
 
-impl<T, V: Version> DoubleEndedIterator for ValuesMut<'_, T, V> {
+impl<T, V: Version> DoubleEndedIterator for IterMut<'_, T, V> {
     fn next_back(&mut self) -> Option<Self::Item> { self.slots.next_back().map(value) }
 }
-impl<T, V: Version> ExactSizeIterator for ValuesMut<'_, T, V> {}
-impl<T, V: Version> core::iter::FusedIterator for ValuesMut<'_, T, V> {}
+impl<T, V: Version> ExactSizeIterator for IterMut<'_, T, V> {}
+impl<T, V: Version> core::iter::FusedIterator for IterMut<'_, T, V> {}
 
-pub struct IntoValues<T, V: Version> {
+pub struct IntoIter<T, V: Version> {
     slots: IntoOccupied<T, V>,
 }
 
-impl<T, V: Version> Iterator for IntoValues<T, V> {
+impl<T, V: Version> Iterator for IntoIter<T, V> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> { self.slots.next().map(value) }
@@ -758,11 +762,11 @@ impl<T, V: Version> Iterator for IntoValues<T, V> {
     fn count(self) -> usize { self.slots.count() }
 }
 
-impl<T, V: Version> DoubleEndedIterator for IntoValues<T, V> {
+impl<T, V: Version> DoubleEndedIterator for IntoIter<T, V> {
     fn next_back(&mut self) -> Option<Self::Item> { self.slots.next_back().map(value) }
 }
-impl<T, V: Version> ExactSizeIterator for IntoValues<T, V> {}
-impl<T, V: Version> core::iter::FusedIterator for IntoValues<T, V> {}
+impl<T, V: Version> ExactSizeIterator for IntoIter<T, V> {}
+impl<T, V: Version> core::iter::FusedIterator for IntoIter<T, V> {}
 
 pub struct Entries<'a, T, I, V: Version, K> {
     slots: Occupied<'a, T, V>,

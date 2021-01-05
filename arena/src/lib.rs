@@ -119,8 +119,8 @@ macro_rules! __newtype {
             pub fn remove_all(&mut self) { self.0.remove_all() }
             pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, f: F) { self.0.retain(f) }
             pub fn keys(&self) -> Keys<'_ $(, $keys)?> { self.0.keys() }
-            pub fn iter(&self) -> Iter<'_, T> { self.0.values() }
-            pub fn iter_mut(&mut self) -> IterMut<'_, T> { self.0.values_mut() }
+            pub fn iter(&self) -> Iter<'_, T> { self.0.iter() }
+            pub fn iter_mut(&mut self) -> IterMut<'_, T> { self.0.iter_mut() }
             pub fn entries(&self) -> Entries<'_, T> { self.0.entries() }
             pub fn entries_mut(&mut self) -> EntriesMut<'_, T> { self.0.entries_mut() }
             pub fn into_entries(self) -> IntoEntries<T> { self.0.into_entries() }
@@ -130,7 +130,7 @@ macro_rules! __newtype {
             type IntoIter = IntoIter<T>;
             type Item = T;
 
-            fn into_iter(self) -> Self::IntoIter { self.0.into_values() }
+            fn into_iter(self) -> Self::IntoIter { self.0.into_iter() }
         }
 
         impl<T> Index<Key> for Arena<T> {
@@ -150,9 +150,9 @@ macro_rules! __newtype {
             use $crate::base::sparse as key;
 
             $item_vis type Version = $version;
-            $item_vis type Iter<'a, T> = imp::Values<'a, T, Version>;
-            $item_vis type IterMut<'a, T> = imp::ValuesMut<'a, T, Version>;
-            $item_vis type IntoIter<T> = imp::IntoValues<T, Version>;
+            $item_vis type Iter<'a, T> = imp::Iter<'a, T, Version>;
+            $item_vis type IterMut<'a, T> = imp::IterMut<'a, T, Version>;
+            $item_vis type IntoIter<T> = imp::IntoIter<T, Version>;
 
             $item_vis type Keys<'a, T> = imp::Keys<'a, T, Identifier, Version, Key>;
 
@@ -171,9 +171,9 @@ macro_rules! __newtype {
             use $crate::base::hop as key;
 
             $item_vis type Version = $version;
-            $item_vis type Iter<'a, T> = imp::Values<'a, T, Version>;
-            $item_vis type IterMut<'a, T> = imp::ValuesMut<'a, T, Version>;
-            $item_vis type IntoIter<T> = imp::IntoValues<T, Version>;
+            $item_vis type Iter<'a, T> = imp::Iter<'a, T, Version>;
+            $item_vis type IterMut<'a, T> = imp::IterMut<'a, T, Version>;
+            $item_vis type IntoIter<T> = imp::IntoIter<T, Version>;
 
             $item_vis type Keys<'a, T> = imp::Keys<'a, T, Identifier, Version, Key>;
 

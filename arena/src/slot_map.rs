@@ -50,9 +50,9 @@ macro_rules! imp_slot_map {
 
             pub fn try_remove(&mut self, index: Key) -> Option<T> { self.0.try_remove(index) }
 
-            pub fn iter(&self) -> Iter<'_, T> { self.0.values() }
+            pub fn iter(&self) -> Iter<'_, T> { self.0.iter() }
 
-            pub fn iter_mut(&mut self) -> IterMut<'_, T> { self.0.values_mut() }
+            pub fn iter_mut(&mut self) -> IterMut<'_, T> { self.0.iter_mut() }
 
             pub fn entries(&self) -> Entries<'_, T> { self.0.entries() }
 
@@ -65,7 +65,7 @@ macro_rules! imp_slot_map {
             type IntoIter = IntoIter<T>;
             type Item = T;
 
-            fn into_iter(self) -> Self::IntoIter { self.0.into_values() }
+            fn into_iter(self) -> Self::IntoIter { self.0.into_iter() }
         }
 
         impl<T> Index<Key> for SlotMap<T> {

@@ -5,9 +5,9 @@ use crate::{
     version::Unversioned,
 };
 
-pub type Iter<'a, T> = imp::Values<'a, T, Unversioned>;
-pub type IterMut<'a, T> = imp::ValuesMut<'a, T, Unversioned>;
-pub type IntoIter<T> = imp::IntoValues<T, Unversioned>;
+pub type Iter<'a, T> = imp::Iter<'a, T, Unversioned>;
+pub type IterMut<'a, T> = imp::IterMut<'a, T, Unversioned>;
+pub type IntoIter<T> = imp::IntoIter<T, Unversioned>;
 
 imp_slab! {
     new: Arena::with_ident(()),
