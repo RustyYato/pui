@@ -19,6 +19,7 @@ pub mod slab;
 pub mod slot_map;
 
 #[doc(hidden)]
+#[cfg(feature = "pui")]
 pub use {core, pui_core, pui_vec};
 
 #[macro_export]
