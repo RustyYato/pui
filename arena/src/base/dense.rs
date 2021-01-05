@@ -341,20 +341,20 @@ macro_rules! entry_impl {
     () => {
         fn next(&mut self) -> Option<Self::Item> {
             self.keys.next().map(move |key| {
-                let value = self
-                    .values
-                    .next()
-                    .unwrap_or_else(|| unsafe { core::hint::unreachable_unchecked() });
+                let value = match self.values.next() {
+                    Some(item) => item,
+                    None => unsafe { core::hint::unreachable_unchecked() },
+                };
                 (key, value)
             })
         }
 
         fn nth(&mut self, n: usize) -> Option<Self::Item> {
             self.keys.nth(n).map(move |key| {
-                let value = self
-                    .values
-                    .nth(n)
-                    .unwrap_or_else(|| unsafe { core::hint::unreachable_unchecked() });
+                let value = match self.values.nth(n) {
+                    Some(item) => item,
+                    None => unsafe { core::hint::unreachable_unchecked() },
+                };
                 (key, value)
             })
         }
@@ -364,20 +364,20 @@ macro_rules! entry_impl {
     (rev) => {
         fn next_back(&mut self) -> Option<Self::Item> {
             self.keys.next_back().map(move |key| {
-                let value = self
-                    .values
-                    .next_back()
-                    .unwrap_or_else(|| unsafe { core::hint::unreachable_unchecked() });
+                let value = match self.values.next_back() {
+                    Some(item) => item,
+                    None => unsafe { core::hint::unreachable_unchecked() },
+                };
                 (key, value)
             })
         }
 
         fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
             self.keys.nth_back(n).map(move |key| {
-                let value = self
-                    .values
-                    .nth_back(n)
-                    .unwrap_or_else(|| unsafe { core::hint::unreachable_unchecked() });
+                let value = match self.values.nth_back(n) {
+                    Some(item) => item,
+                    None => unsafe { core::hint::unreachable_unchecked() },
+                };
                 (key, value)
             })
         }
