@@ -241,7 +241,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
                 VacantEntry {
                     arena: self,
-                    index: end,
+                    index: next,
                     updated_gen,
                     free,
                 }

@@ -537,6 +537,7 @@ impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for Int
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::vec::Vec;
 
     #[test]
     fn basic() {
@@ -568,8 +569,20 @@ mod test {
     }
 
     #[test]
+    fn basic_reinsertion() {
+        let mut arena = Arena::new();
+        let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        for i in (0..ins_values.len()).rev().step_by(3) {
+            let key = ins_values.remove(i);
+            arena.remove(key);
+        }
+        for i in ins_values.len()..10 {
+            ins_values.push(arena.insert(i * 100));
+        }
+    }
+
+    #[test]
     fn iter_keys_insert_only() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         let iter_keys = arena.keys().collect::<Vec<usize>>();
@@ -578,7 +591,6 @@ mod test {
 
     #[test]
     fn iter_keys_rev_insert_only() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let mut ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         let iter_keys = arena.keys().rev().collect::<Vec<usize>>();
@@ -589,7 +601,6 @@ mod test {
 
     #[test]
     fn iter_keys_with_removal() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let mut ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         for i in (0..ins_keys.len()).rev().step_by(3) {
@@ -602,7 +613,6 @@ mod test {
 
     #[test]
     fn iter_keys_rev_with_removal() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let mut ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         for i in (0..ins_keys.len()).rev().step_by(3) {
@@ -616,7 +626,6 @@ mod test {
 
     #[test]
     fn iter_keys_with_reinsertion() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let mut ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         for i in (0..ins_keys.len()).rev().step_by(3) {
@@ -641,7 +650,6 @@ mod test {
 
     #[test]
     fn iter_values_insert_only() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         let iter_values = arena.iter().copied().collect::<Vec<_>>();
@@ -650,7 +658,6 @@ mod test {
 
     #[test]
     fn iter_values_rev_insert_only() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         let mut iter_values = arena.iter().copied().rev().collect::<Vec<_>>();
@@ -660,7 +667,6 @@ mod test {
 
     #[test]
     fn iter_values_with_removal() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         for i in (0..ins_values.len()).rev().step_by(3) {
@@ -673,7 +679,6 @@ mod test {
 
     #[test]
     fn iter_values_rev_with_removal() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         for i in (0..ins_values.len()).rev().step_by(3) {
@@ -687,7 +692,6 @@ mod test {
 
     #[test]
     fn iter_values_with_reinsertion() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         for i in (0..ins_values.len()).rev().step_by(3) {
@@ -711,7 +715,6 @@ mod test {
 
     #[test]
     fn iter_values_mut_insert_only() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         let iter_values_mut = arena.iter_mut().map(|&mut x| x).collect::<Vec<_>>();
@@ -720,7 +723,6 @@ mod test {
 
     #[test]
     fn iter_values_mut_rev_insert_only() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         let mut iter_values_mut = arena.iter_mut().map(|&mut x| x).rev().collect::<Vec<_>>();
@@ -730,7 +732,6 @@ mod test {
 
     #[test]
     fn iter_values_mut_with_removal() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         for i in (0..ins_values.len()).rev().step_by(3) {
@@ -743,7 +744,6 @@ mod test {
 
     #[test]
     fn iter_values_mut_rev_with_removal() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         for i in (0..ins_values.len()).rev().step_by(3) {
@@ -757,7 +757,6 @@ mod test {
 
     #[test]
     fn iter_values_mut_with_reinsertion() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         for i in (0..ins_values.len()).rev().step_by(3) {
@@ -781,7 +780,6 @@ mod test {
 
     #[test]
     fn into_iter_values_insert_only() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         let into_iter_values = arena.into_iter().collect::<Vec<_>>();
@@ -790,7 +788,6 @@ mod test {
 
     #[test]
     fn into_iter_values_rev_insert_only() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         let mut into_iter_values = arena.into_iter().rev().collect::<Vec<_>>();
@@ -800,7 +797,6 @@ mod test {
 
     #[test]
     fn into_iter_values_with_removal() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         for i in (0..ins_values.len()).rev().step_by(3) {
@@ -813,7 +809,6 @@ mod test {
 
     #[test]
     fn into_iter_values_rev_with_removal() {
-        use std::vec::Vec;
         let mut arena = Arena::new();
         let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         for i in (0..ins_values.len()).rev().step_by(3) {
@@ -827,7 +822,6 @@ mod test {
 
     #[test]
     fn into_iter_values_with_reinsertion() {
-        use std::vec::Vec;
         let mk_arena = || {
             let mut arena = Arena::new();
             let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
