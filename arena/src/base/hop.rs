@@ -229,14 +229,15 @@ impl<T, I, V: Version> Arena<T, I, V> {
         let mut i = 0;
 
         for _ in 0..self.num_elements {
-            if unsafe { self.slots.get_unchecked_mut(i).is_vacant() } {
-                i = 1 + unsafe { self.slots.get_unchecked(i).other_end() };
-            }
+            unsafe {
+                let slot = self.slots.get_unchecked_mut(i);
+                if slot.is_vacant() {
+                    i = 1 + slot.other_end();
+                }
 
-            let value = unsafe { self.slots.get_unchecked_mut(i).get_mut_unchecked() };
+                let value = self.slots.get_unchecked_mut(i).get_mut_unchecked();
 
-            if !f(value) {
-                unsafe {
+                if !f(value) {
                     self.remove_unchecked(i);
                 }
             }
