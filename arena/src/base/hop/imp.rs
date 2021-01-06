@@ -210,6 +210,14 @@ impl<T, I, V: Version> Arena<T, I, V> {
         &mut self.slots.get_unchecked_mut(idx).data.mu_free
     }
 
+    pub unsafe fn remove_unchecked(&mut self, index: usize) -> T {
+        self.num_elements -= 1;
+        let slot = self.slots.get_unchecked_mut(index);
+        let value = ManuallyDrop::take(&mut slot.data.value);
+        self.insert_slot_into_freelist(index);
+        value
+    }
+
     pub fn vacant_entry(&mut self) -> VacantEntry<'_, T, I, V> {
         #[cold]
         #[inline(never)]
@@ -266,17 +274,13 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
-    pub unsafe fn remove_unchecked(&mut self, index: usize) -> T {
-        self.num_elements -= 1;
-        let slot = self.slots.get_unchecked_mut(index);
-        let value = ManuallyDrop::take(&mut slot.data.value);
-        self.insert_slot_into_freelist(index);
-        value
-    }
-
     #[inline(always)]
     unsafe fn remove_slot_from_freelist(&mut self, index: usize, free: MaybeUninitFreeNode) {
         use core::cmp::Ordering;
+
+        if index == 0 {
+            core::hint::unreachable_unchecked()
+        }
 
         match free.end.assume_init().cmp(&index) {
             Ordering::Equal => {
