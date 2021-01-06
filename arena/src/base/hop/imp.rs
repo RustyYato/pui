@@ -3,9 +3,7 @@ use core::{
     mem::{ManuallyDrop, MaybeUninit},
 };
 
-use pui_vec::PuiVec;
-
-use super::BuildArenaKey;
+use super::{Arena, BuildArenaKey};
 use crate::version::{DefaultVersion, Version};
 
 #[repr(C)]
@@ -43,12 +41,6 @@ union Data<T> {
 pub(super) struct Slot<T, V: Version> {
     version: V,
     data: Data<T>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Arena<T, I = (), V: Version = DefaultVersion> {
-    pub(super) slots: PuiVec<Slot<T, V>, I>,
-    pub(super) num_elements: usize,
 }
 
 pub struct VacantEntry<'a, T, I, V: Version = DefaultVersion> {
@@ -210,7 +202,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
         &mut self.slots.get_unchecked_mut(idx).data.mu_free
     }
 
-    pub unsafe fn remove_unchecked(&mut self, index: usize) -> T {
+    pub(super) unsafe fn remove_unchecked(&mut self, index: usize) -> T {
         self.num_elements -= 1;
         let slot = self.slots.get_unchecked_mut(index);
         let value = ManuallyDrop::take(&mut slot.data.value);
@@ -218,7 +210,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
         value
     }
 
-    pub fn vacant_entry(&mut self) -> VacantEntry<'_, T, I, V> {
+    pub(super) fn __vacant_entry(&mut self) -> VacantEntry<'_, T, I, V> {
         #[cold]
         #[inline(never)]
         unsafe fn allocate_new_node<T, I, V: Version>(arena: &mut Arena<T, I, V>, index: usize) {

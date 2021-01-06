@@ -19,6 +19,12 @@ pub struct Key<Id, V = crate::version::DefaultVersion> {
     version: V,
 }
 
+#[derive(Debug, Clone)]
+pub struct Arena<T, I = (), V: Version = crate::version::DefaultVersion> {
+    slots: PuiVec<Slot<T, V>, I>,
+    num_elements: usize,
+}
+
 pub trait ArenaAccess<I, V: Version> {
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool;
 
@@ -200,6 +206,8 @@ impl<T, I, V: Version> Arena<T, I, V> {
         slot.parse_key(index, self.slots.ident())
     }
 
+    pub fn vacant_entry(&mut self) -> VacantEntry<'_, T, I, V> { self.__vacant_entry() }
+
     pub fn insert<K: BuildArenaKey<I, V>>(&mut self, value: T) -> K { self.vacant_entry().insert(value) }
 
     pub fn remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> T {
@@ -219,7 +227,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
         let mut i = 0;
-        
+
         for _ in 0..self.num_elements {
             if unsafe { self.slots.get_unchecked_mut(i).is_vacant() } {
                 i = 1 + unsafe { self.slots.get_unchecked(i).other_end() };
@@ -583,6 +591,17 @@ mod test {
         for i in ins_values.len()..10 {
             ins_values.push(arena.insert(i * 100));
         }
+    }
+
+    #[test]
+    fn basic_retain() {
+        let mut arena = Arena::new();
+        for i in 0..10 {
+            let _: usize = arena.insert(i);
+        }
+        arena.retain(|&mut i| i % 3 == 0);
+        let items = arena.iter().copied().collect::<Vec<_>>();
+        assert_eq!(items, [0, 3, 6, 9]);
     }
 
     #[test]
