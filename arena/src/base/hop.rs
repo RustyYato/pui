@@ -601,7 +601,8 @@ mod test {
             let _: usize = arena.insert(i);
         }
         arena.retain(|&mut i| i % 3 == 0);
-        let items = arena.iter().copied().collect::<Vec<_>>();
+        let mut items = arena.iter().copied().collect::<Vec<_>>();
+        items.sort_unstable();
         assert_eq!(items, [0, 3, 6, 9]);
     }
 
@@ -609,16 +610,17 @@ mod test {
     fn iter_keys_insert_only() {
         let mut arena = Arena::new();
         let ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
-        let iter_keys = arena.keys().collect::<Vec<usize>>();
+        let mut iter_keys = arena.keys().collect::<Vec<usize>>();
+        iter_keys.sort_unstable();
         assert_eq!(ins_keys, iter_keys);
     }
 
     #[test]
     fn iter_keys_rev_insert_only() {
         let mut arena = Arena::new();
-        let mut ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
-        let iter_keys = arena.keys().rev().collect::<Vec<usize>>();
-        ins_keys.reverse();
+        let ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        let mut iter_keys = arena.keys().rev().collect::<Vec<usize>>();
+        iter_keys.sort_unstable();
 
         assert_eq!(ins_keys, iter_keys);
     }
@@ -631,7 +633,8 @@ mod test {
             let key = ins_keys.remove(i);
             arena.remove(key);
         }
-        let iter_keys = arena.keys().collect::<Vec<usize>>();
+        let mut iter_keys = arena.keys().collect::<Vec<usize>>();
+        iter_keys.sort_unstable();
         assert_eq!(ins_keys, iter_keys);
     }
 
@@ -643,8 +646,9 @@ mod test {
             let key = ins_keys.remove(i);
             arena.remove(key);
         }
-        ins_keys.reverse();
-        let iter_keys = arena.keys().rev().collect::<Vec<usize>>();
+        ins_keys.sort_unstable();
+        let mut iter_keys = arena.keys().rev().collect::<Vec<usize>>();
+        iter_keys.sort_unstable();
         assert_eq!(ins_keys, iter_keys);
     }
 
@@ -676,7 +680,8 @@ mod test {
     fn iter_values_insert_only() {
         let mut arena = Arena::new();
         let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
-        let iter_values = arena.iter().copied().collect::<Vec<_>>();
+        let mut iter_values = arena.iter().copied().collect::<Vec<_>>();
+        iter_values.sort_unstable();
         assert_eq!(iter_values, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
     }
 
@@ -685,7 +690,7 @@ mod test {
         let mut arena = Arena::new();
         let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         let mut iter_values = arena.iter().copied().rev().collect::<Vec<_>>();
-        iter_values.reverse();
+        iter_values.sort_unstable();
         assert_eq!(iter_values, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
     }
 
@@ -697,7 +702,8 @@ mod test {
             let key = ins_values.remove(i);
             arena.remove(key);
         }
-        let iter_values = arena.iter().copied().collect::<Vec<_>>();
+        let mut iter_values = arena.iter().copied().collect::<Vec<_>>();
+        iter_values.sort_unstable();
         assert_eq!(iter_values, [10, 20, 40, 50, 70, 80]);
     }
 
@@ -710,7 +716,7 @@ mod test {
             arena.remove(key);
         }
         let mut iter_values = arena.iter().copied().rev().collect::<Vec<_>>();
-        iter_values.reverse();
+        iter_values.sort_unstable();
         assert_eq!(iter_values, [10, 20, 40, 50, 70, 80]);
     }
 
@@ -741,7 +747,8 @@ mod test {
     fn iter_values_mut_insert_only() {
         let mut arena = Arena::new();
         let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
-        let iter_values_mut = arena.iter_mut().map(|&mut x| x).collect::<Vec<_>>();
+        let mut iter_values_mut = arena.iter_mut().map(|&mut x| x).collect::<Vec<_>>();
+        iter_values_mut.sort_unstable();
         assert_eq!(iter_values_mut, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
     }
 
@@ -750,7 +757,7 @@ mod test {
         let mut arena = Arena::new();
         let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         let mut iter_values_mut = arena.iter_mut().map(|&mut x| x).rev().collect::<Vec<_>>();
-        iter_values_mut.reverse();
+        iter_values_mut.sort_unstable();
         assert_eq!(iter_values_mut, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
     }
 
@@ -762,7 +769,8 @@ mod test {
             let key = ins_values.remove(i);
             arena.remove(key);
         }
-        let iter_values_mut = arena.iter_mut().map(|&mut x| x).collect::<Vec<_>>();
+        let mut iter_values_mut = arena.iter_mut().map(|&mut x| x).collect::<Vec<_>>();
+        iter_values_mut.sort_unstable();
         assert_eq!(iter_values_mut, [10, 20, 40, 50, 70, 80]);
     }
 
@@ -775,7 +783,7 @@ mod test {
             arena.remove(key);
         }
         let mut iter_values_mut = arena.iter_mut().map(|&mut x| x).rev().collect::<Vec<_>>();
-        iter_values_mut.reverse();
+        iter_values_mut.sort_unstable();
         assert_eq!(iter_values_mut, [10, 20, 40, 50, 70, 80]);
     }
 
@@ -806,7 +814,8 @@ mod test {
     fn into_iter_values_insert_only() {
         let mut arena = Arena::new();
         let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
-        let into_iter_values = arena.into_iter().collect::<Vec<_>>();
+        let mut into_iter_values = arena.into_iter().collect::<Vec<_>>();
+        into_iter_values.sort_unstable();
         assert_eq!(into_iter_values, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
     }
 
@@ -815,7 +824,7 @@ mod test {
         let mut arena = Arena::new();
         let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
         let mut into_iter_values = arena.into_iter().rev().collect::<Vec<_>>();
-        into_iter_values.reverse();
+        into_iter_values.sort_unstable();
         assert_eq!(into_iter_values, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
     }
 
@@ -827,7 +836,8 @@ mod test {
             let key = ins_values.remove(i);
             arena.remove(key);
         }
-        let into_iter_values = arena.into_iter().collect::<Vec<_>>();
+        let mut into_iter_values = arena.into_iter().collect::<Vec<_>>();
+        into_iter_values.sort_unstable();
         assert_eq!(into_iter_values, [10, 20, 40, 50, 70, 80]);
     }
 
@@ -840,7 +850,7 @@ mod test {
             arena.remove(key);
         }
         let mut into_iter_values = arena.into_iter().rev().collect::<Vec<_>>();
-        into_iter_values.reverse();
+        into_iter_values.sort_unstable();
         assert_eq!(into_iter_values, [10, 20, 40, 50, 70, 80]);
     }
 
