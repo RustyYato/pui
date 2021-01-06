@@ -1,6 +1,6 @@
 use core::{
     marker::PhantomData,
-    mem::ManuallyDrop,
+    mem::{ManuallyDrop, MaybeUninit},
     ops::{Index, IndexMut},
 };
 
@@ -157,16 +157,35 @@ impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for Key<pui
     }
 }
 
-#[derive(Clone, Copy)]
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
 struct FreeNode {
     next: usize,
     prev: usize,
     end: usize,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct MaybeUninitFreeNode {
+    next: MaybeUninit<usize>,
+    prev: MaybeUninit<usize>,
+    end: MaybeUninit<usize>,
+}
+
+impl From<FreeNode> for MaybeUninitFreeNode {
+    fn from(FreeNode { next, prev, end }: FreeNode) -> Self {
+        Self {
+            next: MaybeUninit::new(next),
+            prev: MaybeUninit::new(prev),
+            end: MaybeUninit::new(end),
+        }
+    }
+}
 union Data<T> {
     value: ManuallyDrop<T>,
     free: FreeNode,
+    mu_free: MaybeUninitFreeNode,
 }
 
 struct Slot<T, V: Version> {
@@ -190,7 +209,7 @@ pub struct VacantEntry<'a, T, I, V: Version = DefaultVersion> {
     arena: &'a mut Arena<T, I, V>,
     index: usize,
     updated_gen: V,
-    free: FreeNode,
+    free: MaybeUninitFreeNode,
 }
 
 impl<T, V: Version> Drop for Slot<T, V> {
@@ -263,7 +282,6 @@ impl<'a, T, I, V: Version> VacantEntry<'a, T, I, V> {
             };
             slot.version = self.updated_gen;
             self.arena.num_elements += 1;
-
             self.arena.remove_slot_from_freelist(self.index, self.free);
 
             K::new_unchecked(self.index, self.updated_gen.save(), self.arena.slots.ident())
@@ -298,7 +316,14 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn reserve(&mut self, additional: usize) { self.slots.reserve(additional) }
 
-    unsafe fn freelist(&mut self, idx: usize) -> &mut FreeNode { &mut self.slots.get_unchecked_mut(idx).data.free }
+    unsafe fn freelist(&mut self, idx: usize) -> &mut FreeNode {
+        // dbg!(idx);
+        &mut self.slots.get_unchecked_mut(idx).data.free
+    }
+
+    unsafe fn mu_freelist(&mut self, idx: usize) -> &mut MaybeUninitFreeNode {
+        &mut self.slots.get_unchecked_mut(idx).data.mu_free
+    }
 
     #[inline]
     pub fn parse_key<K: BuildArenaKey<I, V>>(&self, index: usize) -> Option<K> {
@@ -329,9 +354,23 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
 
         unsafe {
-            let head = self.freelist(0).next;
+            let head = self.freelist(0);
+            let end = head.end;
+            let head = head.next;
+            let next = [end, head][usize::from(end == 0)];
 
-            if head == 0 {
+            if next != 0 {
+                let slot = self.slots.get_unchecked_mut(next);
+                let updated_gen = slot.version.mark_full();
+                let free = slot.data.mu_free;
+
+                VacantEntry {
+                    arena: self,
+                    index: end,
+                    updated_gen,
+                    free,
+                }
+            } else {
                 // if there are no elements in the freelist
 
                 let index = self.slots.len();
@@ -345,18 +384,8 @@ impl<T, I, V: Version> Arena<T, I, V> {
                         next: 0,
                         prev: 0,
                         end: index,
-                    },
-                }
-            } else {
-                let slot = self.slots.get_unchecked_mut(head);
-                let updated_gen = slot.version.mark_full();
-                let free = slot.data.free;
-
-                VacantEntry {
-                    arena: self,
-                    index: head,
-                    updated_gen,
-                    free,
+                    }
+                    .into(),
                 }
             }
         }
@@ -385,22 +414,32 @@ impl<T, I, V: Version> Arena<T, I, V> {
     }
 
     #[inline(always)]
-    unsafe fn remove_slot_from_freelist(&mut self, index: usize, free: FreeNode) {
-        if free.end != index {
-            // if there are more items in the block, pop this node from the freelist
+    unsafe fn remove_slot_from_freelist(&mut self, index: usize, free: MaybeUninitFreeNode) {
+        use core::cmp::Ordering;
 
-            let index = index.wrapping_add(1);
-            *self.freelist(index) = free;
+        match free.end.assume_init().cmp(&index) {
+            Ordering::Equal => {
+                // if this is the last element in the block
+                self.mu_freelist(free.next.assume_init()).prev = free.prev;
+                self.mu_freelist(free.prev.assume_init()).next = free.next;
+                return
+            }
+            // if there are more items in the block, and this is the *end* of the block
+            // pop this node from the freelist
+            Ordering::Less => self.mu_freelist(free.end.assume_init()).end = MaybeUninit::new(index.wrapping_sub(1)),
+            // if there are more items in the block, and this is the *start* of the block
+            // pop this node from the freelist and rebind the prev and next to point to
+            // this node
+            Ordering::Greater => {
+                let index = index.wrapping_add(1);
 
-            self.freelist(free.end).end = index;
-            self.freelist(free.next).prev = index;
-            self.freelist(free.prev).next = index;
-        } else {
-            // if this is the last element in the block
-
-            self.freelist(free.next).prev = free.prev;
-            self.freelist(free.prev).next = free.next;
-        }
+                *self.mu_freelist(index) = free.into();
+                let index = MaybeUninit::new(index);
+                self.mu_freelist(free.end.assume_init()).end = index;
+                self.mu_freelist(free.next.assume_init()).prev = index;
+                self.mu_freelist(free.prev.assume_init()).next = index;
+            }
+        };
     }
 
     unsafe fn insert_slot_into_freelist(&mut self, index: usize) {
@@ -413,7 +452,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
                 // this is works with iteration because iteration always checks
                 // if the current slot is vacant, and then accesses `free.end`
-                slot.data.free.end = index;
+                slot.data.mu_free.end = MaybeUninit::new(index);
                 return
             }
         }
@@ -428,41 +467,42 @@ impl<T, I, V: Version> Arena<T, I, V> {
                 let head = self.freelist(0);
                 let old_head = head.next;
                 head.next = index;
-                *self.freelist(index) = FreeNode {
+                *self.mu_freelist(index) = FreeNode {
                     prev: 0,
                     next: old_head,
                     end: index,
-                };
+                }
+                .into();
             }
             (false, true) => {
                 // prepend
 
                 let front = *self.freelist(index + 1);
-                *self.freelist(index) = front;
-                self.freelist(front.end).end = index;
-
-                self.freelist(front.next).prev = index;
-                self.freelist(front.prev).next = index;
+                *self.mu_freelist(index) = front.into();
+                let index = MaybeUninit::new(index);
+                self.mu_freelist(front.end).end = index;
+                self.mu_freelist(front.next).prev = index;
+                self.mu_freelist(front.prev).next = index;
             }
             (true, false) => {
                 // append
 
-                let front = self.freelist(index - 1).end;
-                self.freelist(index).end = front;
-                self.freelist(front).end = index;
+                let front = self.mu_freelist(index - 1).end.assume_init();
+                self.mu_freelist(index).end = MaybeUninit::new(front);
+                self.mu_freelist(front).end = MaybeUninit::new(index);
             }
             (true, true) => {
                 // join
 
                 let next = *self.freelist(index + 1);
-                self.freelist(next.prev).next = next.next;
-                self.freelist(next.next).prev = next.prev;
+                self.mu_freelist(next.prev).next = MaybeUninit::new(next.next);
+                self.mu_freelist(next.next).prev = MaybeUninit::new(next.prev);
 
-                let front = self.freelist(index - 1).end;
+                let front = self.mu_freelist(index - 1).end.assume_init();
                 let back = next.end;
 
-                self.freelist(front).end = back;
-                self.freelist(back).end = front;
+                self.mu_freelist(front).end = MaybeUninit::new(back);
+                self.mu_freelist(back).end = MaybeUninit::new(front);
             }
         }
     }
@@ -847,6 +887,35 @@ impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for Int
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn basic() {
+        let mut arena = Arena::new();
+
+        let a: usize = arena.insert(0);
+        assert_eq!(a, 1);
+        assert_eq!(arena[a], 0);
+        assert_eq!(arena.remove(a), 0);
+        assert_eq!(arena.get(a), None);
+
+        let b: usize = arena.insert(10);
+        assert_eq!(b, 1);
+        assert_eq!(arena[b], 10);
+
+        let b: usize = arena.insert(20);
+        assert_eq!(b, 2);
+        assert_eq!(arena[b], 20);
+        assert_eq!(arena.remove(a), 10);
+        assert_eq!(arena.get(a), None);
+
+        let c: usize = arena.insert(30);
+        assert_eq!(c, 1);
+        assert_eq!(arena[c], 30);
+        assert_eq!(arena.remove(b), 20);
+        assert_eq!(arena.get(b), None);
+        assert_eq!(arena.remove(c), 30);
+        assert_eq!(arena.get(c), None);
+    }
 
     #[test]
     fn iter_keys_insert_only() {
