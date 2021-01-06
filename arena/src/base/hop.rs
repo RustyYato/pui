@@ -215,23 +215,27 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> { key.get_mut(self) }
 
-    // pub fn remove_all(&mut self) { self.retain(|_| false) }
+    pub fn remove_all(&mut self) { self.retain(|_| false) }
 
-    // pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
-    //     let mut i = 0;
-    //     let end = self.slots.len();
-    //     while i != end {
-    //         match unsafe { self.slots.get_unchecked_mut(i).get_mut() } {
-    //             Some(value) => unsafe {
-    //                 if !f(value) {
-    //                     self.remove_unchecked(i);
-    //                 }
-    //             },
-    //             None => i = unsafe { self.freelist(i).end },
-    //         }
-    //         i += 1;
-    //     }
-    // }
+    pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
+        let mut i = 0;
+        
+        for _ in 0..self.num_elements {
+            if unsafe { self.slots.get_unchecked_mut(i).is_vacant() } {
+                i = 1 + unsafe { self.slots.get_unchecked(i).other_end() };
+            }
+
+            let value = unsafe { self.slots.get_unchecked_mut(i).get_mut_unchecked() };
+
+            if !f(value) {
+                unsafe {
+                    self.remove_unchecked(i);
+                }
+            }
+
+            i += 1;
+        }
+    }
 
     pub fn keys<K: BuildArenaKey<I, V>>(&self) -> Keys<'_, T, I, V, K> {
         Keys {
