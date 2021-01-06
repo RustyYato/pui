@@ -111,12 +111,12 @@ impl<'a, T, V: Version> IteratorUnchecked for Iter<'a, Slot<T, V>> {
     unsafe fn next(&mut self) -> Self::Item {
         let front = self.front;
         self.advance(1);
-        ((*front).version, &*(*front).data.value)
+        ((*front).version(), (*front).get_unchecked())
     }
 
     unsafe fn next_back(&mut self) -> Self::Item {
         self.advance_back(1);
-        ((*self.back).version, &*(*self.back).data.value)
+        ((*self.back).version(), (*self.back).get_unchecked())
     }
 
     unsafe fn advance(&mut self, n: usize) { self.front = self.front.add(n); }
@@ -161,12 +161,12 @@ impl<'a, T, V: Version> IteratorUnchecked for IterMut<'a, Slot<T, V>> {
     unsafe fn next(&mut self) -> Self::Item {
         let front = self.front;
         self.advance(1);
-        ((*front).version, &mut *(*front).data.value)
+        ((*front).version(), (*front).get_mut_unchecked())
     }
 
     unsafe fn next_back(&mut self) -> Self::Item {
         self.advance_back(1);
-        ((*self.back).version, &mut *(*self.back).data.value)
+        ((*self.back).version(), (*self.back).get_mut_unchecked())
     }
 
     unsafe fn advance(&mut self, n: usize) { self.front = self.front.add(n); }
@@ -234,14 +234,15 @@ impl<'a, T, V: Version> IteratorUnchecked for IntoIter<Slot<T, V>> {
     fn len(&self) -> usize { unsafe { self.back.offset_from(self.front) as usize } }
 
     unsafe fn next(&mut self) -> Self::Item {
-        let front = self.front;
+        let front = self.front as *mut Slot<T, V>;
         self.advance(1);
-        ((*front).version, core::ptr::read(&*(*front).data.value))
+        ((*front).version(), (*front).take_unchecked())
     }
 
     unsafe fn next_back(&mut self) -> Self::Item {
         self.advance_back(1);
-        ((*self.back).version, core::ptr::read(&*(*self.back).data.value))
+        let back = self.back as *mut Slot<T, V>;
+        ((*back).version(), (*back).take_unchecked())
     }
 
     // skips over vacant blocks, which don't need to be dropped
