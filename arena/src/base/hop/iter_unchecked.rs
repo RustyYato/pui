@@ -32,13 +32,15 @@ pub(super) trait IteratorUnchecked {
     }
 }
 
-pub struct Enumerate<I> {
+pub(super) struct Enumerate<I> {
     index: usize,
     iter: I,
 }
 
-impl<I> Enumerate<I> {
+impl<I: IteratorUnchecked> Enumerate<I> {
     pub fn index(&self) -> usize { self.index }
+
+    pub fn index_back(&self) -> usize { self.iter.len() - self.index }
 }
 
 impl<I: IteratorUnchecked> IteratorUnchecked for Enumerate<I> {
@@ -54,8 +56,9 @@ impl<I: IteratorUnchecked> IteratorUnchecked for Enumerate<I> {
     unsafe fn peek_back(&self) -> &Slot<Self::SlotItem, Self::SlotVersion> { self.iter.peek_back() }
 
     unsafe fn next(&mut self) -> Self::Item {
+        let index = self.index;
         self.index += 1;
-        (self.index, self.iter.next())
+        (index, self.iter.next())
     }
 
     unsafe fn next_back(&mut self) -> Self::Item {
@@ -101,7 +104,7 @@ impl<'a, T, V: Version> IteratorUnchecked for Iter<'a, Slot<T, V>> {
 
     unsafe fn peek(&self) -> &Slot<Self::SlotItem, Self::SlotVersion> { &*self.front }
 
-    unsafe fn peek_back(&self) -> &Slot<Self::SlotItem, Self::SlotVersion> { &*self.back }
+    unsafe fn peek_back(&self) -> &Slot<Self::SlotItem, Self::SlotVersion> { &*self.back.sub(1) }
 
     fn len(&self) -> usize { unsafe { self.back.offset_from(self.front) as usize } }
 
@@ -151,7 +154,7 @@ impl<'a, T, V: Version> IteratorUnchecked for IterMut<'a, Slot<T, V>> {
 
     unsafe fn peek(&self) -> &Slot<Self::SlotItem, Self::SlotVersion> { &*self.front }
 
-    unsafe fn peek_back(&self) -> &Slot<Self::SlotItem, Self::SlotVersion> { &*self.back }
+    unsafe fn peek_back(&self) -> &Slot<Self::SlotItem, Self::SlotVersion> { &*self.back.sub(1) }
 
     fn len(&self) -> usize { unsafe { self.back.offset_from(self.front) as usize } }
 
@@ -226,7 +229,7 @@ impl<'a, T, V: Version> IteratorUnchecked for IntoIter<Slot<T, V>> {
 
     unsafe fn peek(&self) -> &Slot<Self::SlotItem, Self::SlotVersion> { &*self.front }
 
-    unsafe fn peek_back(&self) -> &Slot<Self::SlotItem, Self::SlotVersion> { &*self.back }
+    unsafe fn peek_back(&self) -> &Slot<Self::SlotItem, Self::SlotVersion> { &*self.back.sub(1) }
 
     fn len(&self) -> usize { unsafe { self.back.offset_from(self.front) as usize } }
 

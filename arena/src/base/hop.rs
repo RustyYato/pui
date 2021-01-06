@@ -615,12 +615,16 @@ impl<T: fmt::Debug, V: Version + fmt::Debug> fmt::Debug for Slot<T, V> {
                 .field("value", unsafe { &*self.data.value })
                 .finish()
         } else {
-            f.debug_struct("Vacant")
-                .field("version", &self.version)
+            let mut debug = f.debug_struct("Vacant");
+            debug.field("version", &self.version);
+
+            #[cfg(all(UB_DEBUG, not(miri)))]
+            debug
                 .field("next", unsafe { &self.data.free.next })
                 .field("prev", unsafe { &self.data.free.prev })
-                .field("end", unsafe { &self.data.free.end })
-                .finish()
+                .field("end", unsafe { &self.data.free.end });
+
+            debug.finish()
         }
     }
 }
@@ -644,7 +648,7 @@ impl<I: IteratorUnchecked> Iterator for OccupiedBase<I> {
             let index = self.slots.index();
             let slot = self.slots.peek();
             if slot.is_vacant() {
-                let skip = slot.data.free.end.wrapping_sub(index);
+                let skip = slot.data.free.end.wrapping_sub(index).wrapping_add(1);
                 self.slots.advance(skip);
             }
             Some(self.slots.next())
@@ -661,7 +665,7 @@ impl<I: iter_unchecked::IteratorUnchecked> DoubleEndedIterator for OccupiedBase<
         self.len = self.len.checked_sub(1)?;
 
         unsafe {
-            let index = self.slots.index();
+            let index = self.slots.index_back();
             let slot = self.slots.peek_back();
             if slot.is_vacant() {
                 let skip = index.wrapping_sub(slot.data.free.end);
@@ -840,12 +844,292 @@ impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for IntoEntri
 impl<T, I, V: Version, K: BuildArenaKey<I, V>> ExactSizeIterator for IntoEntries<T, I, V, K> {}
 impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for IntoEntries<T, I, V, K> {}
 
-#[test]
-fn test() {
-    use std::vec::Vec;
-    let mut arena = Arena::new();
-    let ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
-    let iter_keys = arena.keys().collect::<Vec<usize>>();
+#[cfg(test)]
+mod test {
+    use super::*;
 
-    assert_eq!(ins_keys, iter_keys);
+    #[test]
+    fn iter_keys_insert_only() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        let iter_keys = arena.keys().collect::<Vec<usize>>();
+        assert_eq!(ins_keys, iter_keys);
+    }
+
+    #[test]
+    fn iter_keys_rev_insert_only() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let mut ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        let iter_keys = arena.keys().rev().collect::<Vec<usize>>();
+        ins_keys.reverse();
+
+        assert_eq!(ins_keys, iter_keys);
+    }
+
+    #[test]
+    fn iter_keys_with_removal() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let mut ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        for i in (0..ins_keys.len()).rev().step_by(3) {
+            let key = ins_keys.remove(i);
+            arena.remove(key);
+        }
+        let iter_keys = arena.keys().collect::<Vec<usize>>();
+        assert_eq!(ins_keys, iter_keys);
+    }
+
+    #[test]
+    fn iter_keys_rev_with_removal() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let mut ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        for i in (0..ins_keys.len()).rev().step_by(3) {
+            let key = ins_keys.remove(i);
+            arena.remove(key);
+        }
+        ins_keys.reverse();
+        let iter_keys = arena.keys().rev().collect::<Vec<usize>>();
+        assert_eq!(ins_keys, iter_keys);
+    }
+
+    #[test]
+    fn iter_keys_with_reinsertion() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let mut ins_keys = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        for i in (0..ins_keys.len()).rev().step_by(3) {
+            let key = ins_keys.remove(i);
+            arena.remove(key);
+        }
+        for i in ins_keys.len()..10 {
+            ins_keys.push(arena.insert(i * 100));
+        }
+        let mut iter_keys = arena.keys().collect::<Vec<usize>>();
+        let mut rev_iter_keys = arena.keys().rev().collect::<Vec<usize>>();
+
+        // the order that the keys come out doesn't matter,
+        // so put them in a canonical order
+        ins_keys.sort_unstable();
+        iter_keys.sort_unstable();
+        rev_iter_keys.sort_unstable();
+
+        assert_eq!(ins_keys, iter_keys);
+        assert_eq!(ins_keys, rev_iter_keys);
+    }
+
+    #[test]
+    fn iter_values_insert_only() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        let iter_values = arena.iter().copied().collect::<Vec<_>>();
+        assert_eq!(iter_values, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
+    }
+
+    #[test]
+    fn iter_values_rev_insert_only() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        let mut iter_values = arena.iter().copied().rev().collect::<Vec<_>>();
+        iter_values.reverse();
+        assert_eq!(iter_values, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
+    }
+
+    #[test]
+    fn iter_values_with_removal() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        for i in (0..ins_values.len()).rev().step_by(3) {
+            let key = ins_values.remove(i);
+            arena.remove(key);
+        }
+        let iter_values = arena.iter().copied().collect::<Vec<_>>();
+        assert_eq!(iter_values, [10, 20, 40, 50, 70, 80]);
+    }
+
+    #[test]
+    fn iter_values_rev_with_removal() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        for i in (0..ins_values.len()).rev().step_by(3) {
+            let key = ins_values.remove(i);
+            arena.remove(key);
+        }
+        let mut iter_values = arena.iter().copied().rev().collect::<Vec<_>>();
+        iter_values.reverse();
+        assert_eq!(iter_values, [10, 20, 40, 50, 70, 80]);
+    }
+
+    #[test]
+    fn iter_values_with_reinsertion() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        for i in (0..ins_values.len()).rev().step_by(3) {
+            let key = ins_values.remove(i);
+            arena.remove(key);
+        }
+        for i in ins_values.len()..10 {
+            ins_values.push(arena.insert(i * 100));
+        }
+        let mut iter_values = arena.iter().copied().collect::<Vec<usize>>();
+        let mut rev_iter_values = arena.iter().copied().rev().collect::<Vec<usize>>();
+
+        // the order that the iter come out doesn't matter,
+        // so put them in a canonical order
+        iter_values.sort_unstable();
+        rev_iter_values.sort_unstable();
+
+        assert_eq!(iter_values, [10, 20, 40, 50, 70, 80, 600, 700, 800, 900]);
+        assert_eq!(rev_iter_values, [10, 20, 40, 50, 70, 80, 600, 700, 800, 900]);
+    }
+
+    #[test]
+    fn iter_values_mut_insert_only() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        let iter_values_mut = arena.iter_mut().map(|&mut x| x).collect::<Vec<_>>();
+        assert_eq!(iter_values_mut, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
+    }
+
+    #[test]
+    fn iter_values_mut_rev_insert_only() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        let mut iter_values_mut = arena.iter_mut().map(|&mut x| x).rev().collect::<Vec<_>>();
+        iter_values_mut.reverse();
+        assert_eq!(iter_values_mut, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
+    }
+
+    #[test]
+    fn iter_values_mut_with_removal() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        for i in (0..ins_values.len()).rev().step_by(3) {
+            let key = ins_values.remove(i);
+            arena.remove(key);
+        }
+        let iter_values_mut = arena.iter_mut().map(|&mut x| x).collect::<Vec<_>>();
+        assert_eq!(iter_values_mut, [10, 20, 40, 50, 70, 80]);
+    }
+
+    #[test]
+    fn iter_values_mut_rev_with_removal() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        for i in (0..ins_values.len()).rev().step_by(3) {
+            let key = ins_values.remove(i);
+            arena.remove(key);
+        }
+        let mut iter_values_mut = arena.iter_mut().map(|&mut x| x).rev().collect::<Vec<_>>();
+        iter_values_mut.reverse();
+        assert_eq!(iter_values_mut, [10, 20, 40, 50, 70, 80]);
+    }
+
+    #[test]
+    fn iter_values_mut_with_reinsertion() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        for i in (0..ins_values.len()).rev().step_by(3) {
+            let key = ins_values.remove(i);
+            arena.remove(key);
+        }
+        for i in ins_values.len()..10 {
+            ins_values.push(arena.insert(i * 100));
+        }
+        let mut iter_values_mut = arena.iter_mut().map(|&mut x| x).collect::<Vec<usize>>();
+        let mut rev_iter_values_mut = arena.iter_mut().map(|&mut x| x).rev().collect::<Vec<usize>>();
+
+        // the order that the iter come out doesn't matter,
+        // so put them in a canonical order
+        iter_values_mut.sort_unstable();
+        rev_iter_values_mut.sort_unstable();
+
+        assert_eq!(iter_values_mut, [10, 20, 40, 50, 70, 80, 600, 700, 800, 900]);
+        assert_eq!(rev_iter_values_mut, [10, 20, 40, 50, 70, 80, 600, 700, 800, 900]);
+    }
+
+    #[test]
+    fn into_iter_values_insert_only() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        let into_iter_values = arena.into_iter().collect::<Vec<_>>();
+        assert_eq!(into_iter_values, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
+    }
+
+    #[test]
+    fn into_iter_values_rev_insert_only() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let _ = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        let mut into_iter_values = arena.into_iter().rev().collect::<Vec<_>>();
+        into_iter_values.reverse();
+        assert_eq!(into_iter_values, [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
+    }
+
+    #[test]
+    fn into_iter_values_with_removal() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        for i in (0..ins_values.len()).rev().step_by(3) {
+            let key = ins_values.remove(i);
+            arena.remove(key);
+        }
+        let into_iter_values = arena.into_iter().collect::<Vec<_>>();
+        assert_eq!(into_iter_values, [10, 20, 40, 50, 70, 80]);
+    }
+
+    #[test]
+    fn into_iter_values_rev_with_removal() {
+        use std::vec::Vec;
+        let mut arena = Arena::new();
+        let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+        for i in (0..ins_values.len()).rev().step_by(3) {
+            let key = ins_values.remove(i);
+            arena.remove(key);
+        }
+        let mut into_iter_values = arena.into_iter().rev().collect::<Vec<_>>();
+        into_iter_values.reverse();
+        assert_eq!(into_iter_values, [10, 20, 40, 50, 70, 80]);
+    }
+
+    #[test]
+    fn into_iter_values_with_reinsertion() {
+        use std::vec::Vec;
+        let mk_arena = || {
+            let mut arena = Arena::new();
+            let mut ins_values = (0..10).map(|i| arena.insert(i * 10)).collect::<Vec<usize>>();
+            for i in (0..ins_values.len()).rev().step_by(3) {
+                let key = ins_values.remove(i);
+                arena.remove(key);
+            }
+            for i in ins_values.len()..10 {
+                ins_values.push(arena.insert(i * 100));
+            }
+            arena
+        };
+        let mut into_iter_values = mk_arena().into_iter().collect::<Vec<usize>>();
+        let mut rev_into_iter_values = mk_arena().into_iter().rev().collect::<Vec<usize>>();
+
+        // the order that the iter come out doesn't matter,
+        // so put them in a canonical order
+        into_iter_values.sort_unstable();
+        rev_into_iter_values.sort_unstable();
+
+        assert_eq!(into_iter_values, [10, 20, 40, 50, 70, 80, 600, 700, 800, 900]);
+        assert_eq!(rev_into_iter_values, [10, 20, 40, 50, 70, 80, 600, 700, 800, 900]);
+    }
 }
