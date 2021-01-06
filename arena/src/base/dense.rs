@@ -19,7 +19,7 @@ pub struct Arena<T, I = (), V: Version = DefaultVersion> {
 }
 
 pub struct VacantEntry<'a, T, K, V: Version = DefaultVersion> {
-    sparse: SparseVacantEntry<'a, usize, K, V>,
+    slots: SparseVacantEntry<'a, usize, K, V>,
     values: &'a mut Vec<T>,
     keys: &'a mut MaybeUninit<usize>,
 }
@@ -73,15 +73,23 @@ impl<T, I, V: Version> Arena<T, I, V> {
 }
 
 impl<'a, T, I, V: Version> VacantEntry<'a, T, I, V> {
-    pub fn key<K: BuildArenaKey<I, V>>(&self) -> K { self.sparse.key() }
+    pub fn key<K: BuildArenaKey<I, V>>(&self) -> K { self.slots.key() }
 
     pub fn insert<K: BuildArenaKey<I, V>>(self, value: T) -> K {
+        struct CaptureIndex<K>(usize, K);
+
+        impl<I, V: Version, K: BuildArenaKey<I, V>> BuildArenaKey<I, V> for CaptureIndex<K> {
+            unsafe fn new_unchecked(index: usize, save: V::Save, ident: &I) -> Self {
+                Self(index, K::new_unchecked(index, save, ident))
+            }
+        }
+
         unsafe {
             let index = self.values.len();
             self.values.as_mut_ptr().add(index).write(value);
             self.values.set_len(index + 1);
-            let key = self.sparse.insert(index);
-            *self.keys = MaybeUninit::new(index);
+            let CaptureIndex(back_ref, key) = self.slots.insert(index);
+            *self.keys = MaybeUninit::new(back_ref);
             key
         }
     }
@@ -100,7 +108,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
 
         VacantEntry {
-            sparse: self.slots.vacant_entry(),
+            slots: self.slots.vacant_entry(),
             values: &mut self.values,
             keys: unsafe { self.keys.get_unchecked_mut(len) },
         }
@@ -116,16 +124,8 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> {
         let index = self.slots.try_remove(key)?;
         let value = self.values.swap_remove(index);
-
-        let keys = self.keys.as_mut_ptr();
-
-        let end = unsafe {
-            let this = keys.add(index);
-            let end = keys.add(self.values.len());
-            this.swap(end);
-            *this.cast::<usize>()
-        };
-
+        self.keys.swap(index, self.values.len());
+        let end = unsafe { self.keys[index].assume_init() };
         let end = unsafe { crate::base::sparse::TrustedIndex::new(end) };
 
         // if the last element wasn't removed
@@ -260,9 +260,14 @@ use std::fmt;
 
 impl<T: fmt::Debug, I: fmt::Debug, V: Version + fmt::Debug> fmt::Debug for Arena<T, I, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let keys = unsafe {
+            let keys = self.keys.get_unchecked(..self.values.len());
+            core::slice::from_raw_parts(keys.as_ptr().cast::<usize>(), keys.len())
+        };
         f.debug_struct("Arena")
             .field("slots", &self.slots)
             .field("values", &self.values)
+            .field("keys", &keys)
             .finish()
     }
 }
@@ -451,26 +456,35 @@ mod test {
         let mut arena = Arena::new();
 
         let a: usize = arena.insert(0);
+        println!("1 {:?}", arena);
         assert_eq!(a, 0);
         assert_eq!(arena[a], 0);
         assert_eq!(arena.remove(a), 0);
         assert_eq!(arena.get(a), None);
 
+        println!("2 {:?}", arena);
         let b: usize = arena.insert(10);
+        println!("3 {:?}", arena);
         assert_eq!(b, 0);
         assert_eq!(arena[b], 10);
 
+        println!("4 {:?}", arena);
         let b: usize = arena.insert(20);
+        println!("5 {:?}", arena);
         assert_eq!(b, 1);
         assert_eq!(arena[b], 20);
         assert_eq!(arena.remove(a), 10);
         assert_eq!(arena.get(a), None);
 
+        println!("6 {:?}", arena);
         let c: usize = arena.insert(30);
+        println!("7 {:?}", arena);
         assert_eq!(c, 0);
         assert_eq!(arena[c], 30);
+        assert_eq!(arena[b], 20);
         assert_eq!(arena.remove(b), 20);
         assert_eq!(arena.get(b), None);
+        println!("8 {:?}", arena);
         assert_eq!(arena.remove(c), 30);
         assert_eq!(arena.get(c), None);
     }

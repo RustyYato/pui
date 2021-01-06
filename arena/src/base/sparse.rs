@@ -36,7 +36,7 @@ impl<K: ?Sized + ArenaAccess<I, V>, I, V: Version> ArenaAccess<I, V> for &K {
     fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T> { K::try_remove(self, arena) }
 }
 
-pub trait BuildArenaKey<I, V: Version>: ArenaAccess<I, V> {
+pub trait BuildArenaKey<I, V: Version> {
     unsafe fn new_unchecked(index: usize, save: V::Save, ident: &I) -> Self;
 }
 
