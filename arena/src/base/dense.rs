@@ -130,7 +130,6 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
 
         let value;
-        let end;
 
         unsafe {
             // remove element from vec
@@ -143,15 +142,9 @@ impl<T, I, V: Version> Arena<T, I, V> {
             // remove back ref to slot
             let ptr = self.keys.as_mut_ptr();
             let back_ref = *ptr.add(last).cast::<usize>();
-            ptr.add(last).copy_from_nonoverlapping(ptr.add(index), 1);
-            end = crate::TrustedIndex::new(back_ref);
-        }
+            ptr.add(index).copy_from_nonoverlapping(ptr.add(last), 1);
 
-        // if the last element wasn't removed
-        if let Some(end) = self.slots.get_mut(end) {
-            *end = index
-        } else {
-            unsafe { core::hint::unreachable_unchecked() }
+            *self.slots.get_unchecked_mut(back_ref) = index;
         }
 
         Some(value)
@@ -182,15 +175,8 @@ impl<T, I, V: Version> Arena<T, I, V> {
                     // remove back ref to slot
                     let ptr = keys.as_mut_ptr();
                     let back_ref = *ptr.add(last).cast::<usize>();
-                    ptr.add(last).copy_from_nonoverlapping(ptr.add(index), 1);
-                    let end = crate::TrustedIndex::new(back_ref);
-
-                    // if the last element wasn't removed
-                    if let Some(end) = slots.get_mut(end) {
-                        *end = index
-                    } else {
-                        core::hint::unreachable_unchecked()
-                    }
+                    ptr.add(index).copy_from_nonoverlapping(ptr.add(last), 1);
+                    *slots.get_unchecked_mut(back_ref) = index;
                 }
             }
         }
