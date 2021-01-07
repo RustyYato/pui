@@ -119,12 +119,15 @@ macro_rules! __newtype {
             pub fn parse_key(&self, index: usize) -> Option<Key> { self.0.parse_key(index) }
             pub fn vacant_entry(&mut self) -> VacantEntry<'_, T> { VacantEntry(self.0.vacant_entry()) }
             pub fn insert(&mut self, value: T) -> Key { self.0.insert(value) }
+            pub fn contains(&self, key: Key) -> bool { self.0.contains(key) }
             pub fn remove(&mut self, key: Key) -> T { self.0.remove(key) }
             pub fn try_remove(&mut self, key: Key) -> Option<T> { self.0.try_remove(key) }
-            pub fn contains(&self, key: Key) -> bool { self.0.contains(key) }
+            pub fn delete(&mut self, key: Key) -> bool { self.0.delete(key) }
             pub fn get(&self, key: Key) -> Option<&T> { self.0.get(key) }
             pub fn get_mut(&mut self, key: Key) -> Option<&mut T> { self.0.get_mut(key) }
-            pub fn remove_all(&mut self) { self.0.remove_all() }
+            pub unsafe fn get_unchecked(&self, index: usize) -> &T { self.0.get_unchecked(index) }
+            pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T { self.0.get_unchecked_mut(index) }
+            pub fn delete_all(&mut self) { self.0.delete_all() }
             pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, f: F) { self.0.retain(f) }
             pub fn keys(&self) -> Keys<'_ $(, $keys)?> { self.0.keys() }
             pub fn iter(&self) -> Iter<'_, T> { self.0.iter() }
@@ -144,11 +147,11 @@ macro_rules! __newtype {
         impl<T> Index<Key> for Arena<T> {
             type Output = T;
 
-            fn index(&self, index: Key) -> &Self::Output { &self.0[index] }
+            fn index(&self, key: Key) -> &Self::Output { &self.0[key] }
         }
 
         impl<T> IndexMut<Key> for Arena<T> {
-            fn index_mut(&mut self, index: Key) -> &mut Self::Output { &mut self.0[index] }
+            fn index_mut(&mut self, key: Key) -> &mut Self::Output { &mut self.0[key] }
         }
     };
     (@build_module ($mod_vis:vis) ($item_vis:vis) $name:ident, $version:ty) => {

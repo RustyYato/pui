@@ -346,14 +346,14 @@ impl<T, I, V: Version> Arena<T, I, V> {
         &mut *self.slots.get_unchecked_mut(index).data.value
     }
 
-    pub fn remove_all(&mut self) { self.retain(|_| false) }
+    pub fn delete_all(&mut self) { self.retain(|_| false) }
 
     pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
         for i in 0..self.slots.len() {
             match self.get_mut(unsafe { crate::TrustedIndex::new(i) }) {
                 Some(value) => unsafe {
                     if !f(value) {
-                        self.slots.get_unchecked_mut(i).remove_unchecked(i, &mut self.next);
+                        self.slots.get_unchecked_mut(i).delete_unchecked(i, &mut self.next);
                     }
                 },
                 _ => (),

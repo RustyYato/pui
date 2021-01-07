@@ -42,13 +42,23 @@ macro_rules! imp_slot_map {
 
             pub fn parse_key(&self, index: usize) -> Option<Key> { self.0.parse_key(index) }
 
-            pub fn get(&mut self, index: Key) -> Option<&T> { self.0.get(index) }
+            pub fn get(&mut self, key: Key) -> Option<&T> { self.0.get(key) }
 
-            pub fn get_mut(&mut self, index: Key) -> Option<&mut T> { self.0.get_mut(index) }
+            pub fn get_mut(&mut self, key: Key) -> Option<&mut T> { self.0.get_mut(key) }
 
-            pub fn remove(&mut self, index: Key) -> T { self.0.remove(index) }
+            pub unsafe fn get_unchecked(&mut self, index: usize) -> &T { self.0.get_unchecked(index) }
 
-            pub fn try_remove(&mut self, index: Key) -> Option<T> { self.0.try_remove(index) }
+            pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T { self.0.get_unchecked_mut(index) }
+
+            pub fn remove(&mut self, key: Key) -> T { self.0.remove(key) }
+
+            pub fn try_remove(&mut self, key: Key) -> Option<T> { self.0.try_remove(key) }
+
+            pub fn delete(&mut self, key: Key) -> bool { self.0.delete(key) }
+
+            pub fn delete_all(&mut self) { self.0.delete_all() }
+
+            pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, f: F) { self.0.retain(f) }
 
             pub fn iter(&self) -> Iter<'_, T> { self.0.iter() }
 
@@ -71,11 +81,11 @@ macro_rules! imp_slot_map {
         impl<T> Index<Key> for SlotMap<T> {
             type Output = T;
 
-            fn index(&self, index: Key) -> &Self::Output { &self.0[index] }
+            fn index(&self, key: Key) -> &Self::Output { &self.0[key] }
         }
 
         impl<T> IndexMut<Key> for SlotMap<T> {
-            fn index_mut(&mut self, index: Key) -> &mut Self::Output { &mut self.0[index] }
+            fn index_mut(&mut self, key: Key) -> &mut Self::Output { &mut self.0[key] }
         }
     };
 }

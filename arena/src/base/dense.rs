@@ -248,8 +248,8 @@ impl<T, I, V: Version> Arena<T, I, V> {
         self.values.get_unchecked_mut(slot)
     }
 
-    pub fn remove_all(&mut self) {
-        self.slots.remove_all();
+    pub fn delete_all(&mut self) {
+        self.slots.delete_all();
         self.values.clear();
     }
 
@@ -258,7 +258,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
             let value = unsafe { self.values.get_unchecked_mut(i) };
 
             if !f(value) {
-                self.try_remove(i);
+                self.delete(unsafe { crate::TrustedIndex::new(i) });
             }
         }
     }

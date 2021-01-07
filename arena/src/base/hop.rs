@@ -208,7 +208,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
         self.slots.get_unchecked_mut(index).get_mut_unchecked()
     }
 
-    pub fn remove_all(&mut self) { self.retain(|_| false) }
+    pub fn delete_all(&mut self) { self.retain(|_| false) }
 
     pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
         let mut i = 0;
@@ -223,7 +223,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
                 let value = self.slots.get_unchecked_mut(i).get_mut_unchecked();
 
                 if !f(value) {
-                    self.remove_unchecked(i);
+                    self.delete_unchecked(i);
                 }
             }
 
