@@ -155,6 +155,79 @@ impl<T, I, V: Version> Arena<T, I, V> {
         Some(value)
     }
 
+    pub fn delete<K: ArenaAccess<I, V>>(&mut self, key: K) {
+        struct Fixup<'a, T, I, V: Version> {
+            ptr: *mut T,
+            index: usize,
+            last: usize,
+            keys: &'a mut [MaybeUninit<usize>],
+            slots: &'a mut SparseArena<usize, I, V>,
+        }
+
+        impl<T, I, V: Version> Drop for Fixup<'_, T, I, V> {
+            fn drop(&mut self) {
+                unsafe {
+                    let Self {
+                        ptr,
+                        index,
+                        last,
+                        ref mut keys,
+                        ref mut slots,
+                    } = *self;
+
+                    ptr.add(index).copy_from_nonoverlapping(ptr.add(last), 1);
+
+                    // remove back ref to slot
+                    let ptr = keys.as_mut_ptr();
+                    let back_ref = *ptr.add(last).cast::<usize>();
+                    ptr.add(last).copy_from_nonoverlapping(ptr.add(index), 1);
+                    let end = crate::base::sparse::TrustedIndex::new(back_ref);
+
+                    // if the last element wasn't removed
+                    if let Some(end) = slots.get_mut(end) {
+                        *end = index
+                    } else {
+                        core::hint::unreachable_unchecked()
+                    }
+                }
+            }
+        }
+
+        let index = match self.slots.try_remove(key) {
+            Some(index) => index,
+            None => return,
+        };
+
+        if self.values.is_empty() {
+            unsafe { core::hint::unreachable_unchecked() }
+        }
+
+        if index == self.values.len().wrapping_sub(1) {
+            unsafe {
+                self.values.set_len(index);
+                self.values.as_mut_ptr().add(index).drop_in_place();
+                return
+            }
+        }
+
+        unsafe {
+            // remove element from vec
+            let last = self.values.len().wrapping_sub(1);
+            self.values.set_len(last);
+            let ptr = self.values.as_mut_ptr();
+
+            let _fixup = Fixup {
+                ptr,
+                index,
+                last,
+                keys: &mut self.keys,
+                slots: &mut self.slots,
+            };
+
+            ptr.add(index).drop_in_place();
+        }
+    }
+
     pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { self.slots.contains(key) }
 
     pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> {
@@ -475,35 +548,27 @@ mod test {
         let mut arena = Arena::new();
 
         let a: usize = arena.insert(0);
-        println!("1 {:?}", arena);
         assert_eq!(a, 0);
         assert_eq!(arena[a], 0);
         assert_eq!(arena.remove(a), 0);
         assert_eq!(arena.get(a), None);
 
-        println!("2 {:?}", arena);
         let b: usize = arena.insert(10);
-        println!("3 {:?}", arena);
         assert_eq!(b, 0);
         assert_eq!(arena[b], 10);
 
-        println!("4 {:?}", arena);
         let b: usize = arena.insert(20);
-        println!("5 {:?}", arena);
         assert_eq!(b, 1);
         assert_eq!(arena[b], 20);
         assert_eq!(arena.remove(a), 10);
         assert_eq!(arena.get(a), None);
 
-        println!("6 {:?}", arena);
         let c: usize = arena.insert(30);
-        println!("7 {:?}", arena);
         assert_eq!(c, 0);
         assert_eq!(arena[c], 30);
         assert_eq!(arena[b], 20);
         assert_eq!(arena.remove(b), 20);
         assert_eq!(arena.get(b), None);
-        println!("8 {:?}", arena);
         assert_eq!(arena.remove(c), 30);
         assert_eq!(arena.get(c), None);
     }
