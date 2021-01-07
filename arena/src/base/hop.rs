@@ -179,7 +179,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> {
         if self.contains(&key) {
-            unsafe { Some(self.slots.get_unchecked(key.index()).get_unchecked()) }
+            unsafe { Some(self.get_unchecked(key.index())) }
         } else {
             None
         }
@@ -187,10 +187,16 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> {
         if self.contains(&key) {
-            unsafe { Some(self.slots.get_unchecked_mut(key.index()).get_mut_unchecked()) }
+            unsafe { Some(self.get_unchecked_mut(key.index())) }
         } else {
             None
         }
+    }
+
+    pub unsafe fn get_unchecked(&self, index: usize) -> &T { self.slots.get_unchecked(index).get_unchecked() }
+
+    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
+        self.slots.get_unchecked_mut(index).get_mut_unchecked()
     }
 
     pub fn remove_all(&mut self) { self.retain(|_| false) }

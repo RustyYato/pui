@@ -240,6 +240,16 @@ impl<T, I, V: Version> Arena<T, I, V> {
         unsafe { Some(self.values.get_unchecked_mut(slot)) }
     }
 
+    pub unsafe fn get_unchecked(&self, index: usize) -> &T {
+        let &slot = self.slots.get_unchecked(index);
+        self.values.get_unchecked(slot)
+    }
+
+    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
+        let &slot = self.slots.get_unchecked(index);
+        self.values.get_unchecked_mut(slot)
+    }
+
     pub fn remove_all(&mut self) {
         self.slots.remove_all();
         self.values.clear();
