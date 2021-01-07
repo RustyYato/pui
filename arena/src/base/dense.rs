@@ -95,7 +95,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn vacant_entry(&mut self) -> VacantEntry<'_, T, I, V> {
         let len = self.len();
 
-        if len == self.capacity() {
+        if len == self.keys.len() {
             self.reserve_cold(1);
         }
 
@@ -578,6 +578,35 @@ mod test {
         for i in ins_values.len()..10 {
             ins_values.push(arena.insert(i * 100));
         }
+    }
+
+    #[test]
+    fn zero_sized() {
+        let mut arena = Arena::new();
+
+        let a: usize = arena.insert(());
+        let b: usize = arena.insert(());
+        let c: usize = arena.insert(());
+        let d: usize = arena.insert(());
+        let e: usize = arena.insert(());
+
+        arena.remove(b);
+        arena.remove(d);
+        arena.remove(a);
+        arena.remove(c);
+        arena.remove(e);
+
+        let a: usize = arena.insert(());
+        let b: usize = arena.insert(());
+        let c: usize = arena.insert(());
+        let d: usize = arena.insert(());
+        let e: usize = arena.insert(());
+
+        arena.remove(b);
+        arena.remove(d);
+        arena.remove(a);
+        arena.remove(c);
+        arena.remove(e);
     }
 
     #[test]

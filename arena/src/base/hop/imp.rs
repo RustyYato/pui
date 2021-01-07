@@ -265,7 +265,9 @@ impl<T, I, V: Version> Arena<T, I, V> {
             // if there are more items in the block, and this is the *end* of the block
             // pop this node from the freelist
             Ordering::Less => {
-                self.mu_freelist(free.other_end.assume_init()).other_end = MaybeUninit::new(index.wrapping_sub(1))
+                let other_end = free.other_end.assume_init();
+                self.mu_freelist(other_end).other_end = MaybeUninit::new(index.wrapping_sub(1));
+                self.mu_freelist(index.wrapping_sub(1)).other_end = MaybeUninit::new(other_end)
             }
             // if there are more items in the block, and this is the *start* of the block
             // pop this node from the freelist and rebind the prev and next to point to

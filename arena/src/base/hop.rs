@@ -580,6 +580,35 @@ mod test {
     }
 
     #[test]
+    fn zero_sized() {
+        let mut arena = Arena::new();
+
+        let a: usize = arena.insert(());
+        let b: usize = arena.insert(());
+        let c: usize = arena.insert(());
+        let d: usize = arena.insert(());
+        let e: usize = arena.insert(());
+
+        arena.remove(b);
+        arena.remove(d);
+        arena.remove(a);
+        arena.remove(c);
+        arena.remove(e);
+
+        let a: usize = arena.insert(());
+        let b: usize = arena.insert(());
+        let c: usize = arena.insert(());
+        let d: usize = arena.insert(());
+        let e: usize = arena.insert(());
+
+        arena.remove(b);
+        arena.remove(d);
+        arena.remove(a);
+        arena.remove(c);
+        arena.remove(e);
+    }
+
+    #[test]
     fn basic_retain() {
         let mut arena = Arena::new();
         for i in 0..10 {
