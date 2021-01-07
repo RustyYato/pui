@@ -142,7 +142,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
             let ptr = self.keys.as_mut_ptr();
             let back_ref = *ptr.add(last).cast::<usize>();
             ptr.add(last).copy_from_nonoverlapping(ptr.add(index), 1);
-            end = crate::base::sparse::TrustedIndex::new(back_ref);
+            end = crate::TrustedIndex::new(back_ref);
         }
 
         // if the last element wasn't removed
@@ -181,7 +181,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
                     let ptr = keys.as_mut_ptr();
                     let back_ref = *ptr.add(last).cast::<usize>();
                     ptr.add(last).copy_from_nonoverlapping(ptr.add(index), 1);
-                    let end = crate::base::sparse::TrustedIndex::new(back_ref);
+                    let end = crate::TrustedIndex::new(back_ref);
 
                     // if the last element wasn't removed
                     if let Some(end) = slots.get_mut(end) {

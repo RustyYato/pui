@@ -8,14 +8,6 @@ use pui_vec::PuiVec;
 
 use crate::version::{DefaultVersion, Version};
 
-#[derive(Clone, Copy)]
-pub(crate) struct TrustedIndex(usize);
-
-impl TrustedIndex {
-    #[inline]
-    pub unsafe fn new(index: usize) -> Self { Self(index) }
-}
-
 pub trait ArenaAccess<I, V: Version> {
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool;
 
@@ -44,7 +36,7 @@ impl<I, V: Version> BuildArenaKey<I, V> for usize {
     unsafe fn new_unchecked(index: usize, _: V::Save, _: &I) -> Self { index }
 }
 
-impl<I, V: Version> ArenaAccess<I, V> for TrustedIndex {
+impl<I, V: Version> ArenaAccess<I, V> for crate::TrustedIndex {
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
         unsafe { arena.slots.get_unchecked(self.0).version.is_full() }
     }
@@ -106,6 +98,15 @@ impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for Key<pui
             version,
         }
     }
+}
+
+impl<I, V: Version> ArenaAccess<I, V> for Key<crate::TrustedIndex, V::Save> {
+    fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
+        let version = self.version;
+        unsafe { arena.slots.get_unchecked(self.id.0).version.equals_saved(version) }
+    }
+
+    fn index(&self) -> usize { self.id.0 }
 }
 
 union Data<T> {
@@ -316,7 +317,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
         for i in 0..self.slots.len() {
-            match self.get_mut(TrustedIndex(i)) {
+            match self.get_mut(unsafe { crate::TrustedIndex::new(i) }) {
                 Some(value) => unsafe {
                     if !f(value) {
                         self.slots.get_unchecked_mut(i).remove_unchecked(i, &mut self.next);

@@ -22,6 +22,14 @@ pub mod slot_map;
 #[cfg(feature = "pui")]
 pub use {core, pui_core, pui_vec};
 
+#[derive(Clone, Copy)]
+pub struct TrustedIndex(usize);
+
+impl TrustedIndex {
+    #[inline]
+    pub unsafe fn new(index: usize) -> Self { Self(index) }
+}
+
 #[macro_export]
 #[cfg(feature = "pui")]
 macro_rules! newtype {
