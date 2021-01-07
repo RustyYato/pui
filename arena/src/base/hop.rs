@@ -162,18 +162,27 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn insert<K: BuildArenaKey<I, V>>(&mut self, value: T) -> K { self.vacant_entry().insert(value) }
 
+    pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { key.contained_in(self) }
+
     pub fn remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> T {
         self.try_remove(key)
             .expect("Could not remove form an `Arena` using a stale `Key`")
     }
-
-    pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { key.contained_in(self) }
 
     pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> {
         if self.contains(&key) {
             Some(unsafe { self.remove_unchecked(key.index()) })
         } else {
             None
+        }
+    }
+
+    pub fn delete<K: ArenaAccess<I, V>>(&mut self, key: K) -> bool {
+        if self.contains(&key) {
+            unsafe { self.delete_unchecked(key.index()) }
+            true
+        } else {
+            false
         }
     }
 

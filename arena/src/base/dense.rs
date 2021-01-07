@@ -108,6 +108,8 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn insert<K: BuildArenaKey<I, V>>(&mut self, value: T) -> K { self.vacant_entry().insert(value) }
 
+    pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { self.slots.contains(key) }
+
     pub fn remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> T {
         self.try_remove(key)
             .expect("Could not remove form an `Arena` using a stale `Key`")
@@ -155,7 +157,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
         Some(value)
     }
 
-    pub fn delete<K: ArenaAccess<I, V>>(&mut self, key: K) {
+    pub fn delete<K: ArenaAccess<I, V>>(&mut self, key: K) -> bool {
         struct Fixup<'a, T, I, V: Version> {
             ptr: *mut T,
             index: usize,
@@ -195,19 +197,11 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
         let index = match self.slots.try_remove(key) {
             Some(index) => index,
-            None => return,
+            None => return false,
         };
 
         if self.values.is_empty() {
             unsafe { core::hint::unreachable_unchecked() }
-        }
-
-        if index == self.values.len().wrapping_sub(1) {
-            unsafe {
-                self.values.set_len(index);
-                self.values.as_mut_ptr().add(index).drop_in_place();
-                return
-            }
         }
 
         unsafe {
@@ -216,19 +210,23 @@ impl<T, I, V: Version> Arena<T, I, V> {
             self.values.set_len(last);
             let ptr = self.values.as_mut_ptr();
 
-            let _fixup = Fixup {
-                ptr,
-                index,
-                last,
-                keys: &mut self.keys,
-                slots: &mut self.slots,
+            let _fixup = if index == last {
+                None
+            } else {
+                Some(Fixup {
+                    ptr,
+                    index,
+                    last,
+                    keys: &mut self.keys,
+                    slots: &mut self.slots,
+                })
             };
 
             ptr.add(index).drop_in_place();
+
+            true
         }
     }
-
-    pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { self.slots.contains(key) }
 
     pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> {
         let &slot = self.slots.get(key)?;

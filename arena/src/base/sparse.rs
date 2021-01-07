@@ -156,6 +156,27 @@ impl<T, V: Version> Slot<T, V> {
         }
         value
     }
+
+    unsafe fn delete_unchecked(&mut self, index: usize, next: &mut usize) {
+        struct Fixup<'a, T, V: Version>(&'a mut Slot<T, V>, usize, &'a mut usize);
+
+        impl<T, V: Version> Drop for Fixup<'_, T, V> {
+            fn drop(&mut self) {
+                let Self(ref mut slot, index, ref mut next) = *self;
+                if let Some(next_version) = unsafe { slot.version.mark_empty() } {
+                    slot.version = next_version;
+
+                    slot.data = Data {
+                        next: replace(next, index),
+                    };
+                }
+            }
+        }
+
+        let fixup = Fixup(self, index, next);
+
+        ManuallyDrop::drop(&mut fixup.0.data.value);
+    }
 }
 
 impl<T> Default for Arena<T> {
@@ -269,12 +290,12 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn insert<K: BuildArenaKey<I, V>>(&mut self, value: T) -> K { self.vacant_entry().insert(value) }
 
+    pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { key.contained_in(self) }
+
     pub fn remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> T {
         self.try_remove(key)
             .expect("Could not remove form an `Arena` using a stale `Key`")
     }
-
-    pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { key.contained_in(self) }
 
     pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> {
         if self.contains(&key) {
@@ -286,6 +307,20 @@ impl<T, I, V: Version> Arena<T, I, V> {
             })
         } else {
             None
+        }
+    }
+
+    pub fn delete<K: ArenaAccess<I, V>>(&mut self, key: K) -> bool {
+        if self.contains(&key) {
+            let index = key.index();
+            unsafe {
+                self.slots
+                    .get_unchecked_mut(index)
+                    .delete_unchecked(index, &mut self.next);
+                true
+            }
+        } else {
+            false
         }
     }
 

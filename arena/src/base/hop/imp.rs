@@ -178,6 +178,19 @@ impl<T, I, V: Version> Arena<T, I, V> {
         value
     }
 
+    pub(super) unsafe fn delete_unchecked(&mut self, index: usize) {
+        struct Fixup<'a, T, I, V: Version>(&'a mut Arena<T, I, V>, usize);
+
+        impl<T, I, V: Version> Drop for Fixup<'_, T, I, V> {
+            fn drop(&mut self) { unsafe { self.0.insert_slot_into_freelist(self.1) } }
+        }
+
+        self.num_elements -= 1;
+        let fixup = Fixup(self, index);
+        let slot = fixup.0.slots.get_unchecked_mut(index);
+        ManuallyDrop::drop(&mut slot.data.value);
+    }
+
     pub(super) fn __vacant_entry(&mut self) -> VacantEntry<'_, T, I, V> {
         #[cold]
         #[inline(never)]
