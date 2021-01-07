@@ -76,20 +76,12 @@ impl<'a, T, I, V: Version> VacantEntry<'a, T, I, V> {
     pub fn key<K: BuildArenaKey<I, V>>(&self) -> K { self.slots.key() }
 
     pub fn insert<K: BuildArenaKey<I, V>>(self, value: T) -> K {
-        struct CaptureIndex<K>(usize, K);
-
-        impl<I, V: Version, K: BuildArenaKey<I, V>> BuildArenaKey<I, V> for CaptureIndex<K> {
-            unsafe fn new_unchecked(index: usize, save: V::Save, ident: &I) -> Self {
-                Self(index, K::new_unchecked(index, save, ident))
-            }
-        }
-
         unsafe {
             let index = self.values.len();
             self.values.as_mut_ptr().add(index).write(value);
             self.values.set_len(index + 1);
-            let CaptureIndex(back_ref, key) = self.slots.insert(index);
-            *self.keys = MaybeUninit::new(back_ref);
+            let key: K = self.slots.insert(index);
+            *self.keys = MaybeUninit::new(key.index());
             key
         }
     }
@@ -123,14 +115,41 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> {
         let index = self.slots.try_remove(key)?;
-        let value = self.values.swap_remove(index);
-        self.keys.swap(index, self.values.len());
-        let end = unsafe { self.keys[index].assume_init() };
-        let end = unsafe { crate::base::sparse::TrustedIndex::new(end) };
+
+        if self.values.is_empty() {
+            unsafe { core::hint::unreachable_unchecked() }
+        }
+
+        if index == self.values.len().wrapping_sub(1) {
+            unsafe {
+                self.values.set_len(index);
+                return Some(self.values.as_ptr().add(index).read())
+            }
+        }
+
+        let value;
+        let end;
+
+        unsafe {
+            // remove element from vec
+            let last = self.values.len().wrapping_sub(1);
+            let ptr = self.values.as_mut_ptr();
+            core::mem::swap(&mut *ptr.add(last), &mut *ptr.add(index));
+            value = ptr.add(last).read();
+            self.values.set_len(last);
+
+            // remove back ref to slot
+            let ptr = self.keys.as_mut_ptr();
+            core::mem::swap(&mut *ptr.add(last), &mut *ptr.add(index));
+            let back_ref = ptr.add(index).cast::<usize>().read();
+            end = crate::base::sparse::TrustedIndex::new(back_ref);
+        }
 
         // if the last element wasn't removed
         if let Some(end) = self.slots.get_mut(end) {
             *end = index
+        } else {
+            unsafe { core::hint::unreachable_unchecked() }
         }
 
         Some(value)

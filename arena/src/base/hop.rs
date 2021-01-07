@@ -28,25 +28,17 @@ pub struct Arena<T, I = (), V: Version = crate::version::DefaultVersion> {
 pub trait ArenaAccess<I, V: Version> {
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool;
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T>;
+    fn index(&self) -> usize;
+}
 
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T>;
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T>;
+pub trait BuildArenaKey<I, V: Version>: ArenaAccess<I, V> {
+    unsafe fn new_unchecked(index: usize, version: V::Save, ident: &I) -> Self;
 }
 
 impl<K: ?Sized + ArenaAccess<I, V>, I, V: Version> ArenaAccess<I, V> for &K {
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool { K::contained_in(self, arena) }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T> { K::get(self, arena) }
-
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T> { K::get_mut(self, arena) }
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T> { K::try_remove(self, arena) }
-}
-
-pub trait BuildArenaKey<I, V: Version> {
-    unsafe fn new_unchecked(index: usize, version: V::Save, ident: &I) -> Self;
+    fn index(&self) -> usize { K::index(self) }
 }
 
 impl<I, V: Version> ArenaAccess<I, V> for usize {
@@ -54,20 +46,7 @@ impl<I, V: Version> ArenaAccess<I, V> for usize {
         arena.slots.get(*self).map_or(false, Slot::is_occupied)
     }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T> { arena.slots[self].get() }
-
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T> { arena.slots[self].get_mut() }
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T> {
-        let index = *self;
-        let slot = &mut arena.slots[index];
-
-        if slot.is_occupied() {
-            Some(unsafe { arena.remove_unchecked(index) })
-        } else {
-            None
-        }
-    }
+    fn index(&self) -> usize { *self }
 }
 
 impl<I, V: Version> BuildArenaKey<I, V> for usize {
@@ -76,24 +55,9 @@ impl<I, V: Version> BuildArenaKey<I, V> for usize {
 
 #[cfg(feature = "pui-core")]
 impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for pui_vec::Id<I::Token> {
-    fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
-        arena.ident().owns_token(self.token()) && arena.slots[self].is_occupied()
-    }
+    fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool { arena.slots.get(self).map_or(false, Slot::is_occupied) }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T> { arena.slots[self].get() }
-
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T> { arena.slots[self].get_mut() }
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T> {
-        let index = self.get();
-        let slot = &mut arena.slots[self];
-
-        if slot.is_occupied() {
-            unsafe { Some(arena.remove_unchecked(index)) }
-        } else {
-            None
-        }
-    }
+    fn index(&self) -> usize { self.get() }
 }
 
 #[cfg(feature = "pui-core")]
@@ -112,22 +76,7 @@ impl<I, V: Version> ArenaAccess<I, V> for Key<usize, V::Save> {
             .map_or(false, |slot| slot.version().equals_saved(saved))
     }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T> { arena.slots[self.id].get_with(self.version) }
-
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T> {
-        arena.slots[self.id].get_mut_with(self.version)
-    }
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T> {
-        let index = self.id;
-        let slot = &mut arena.slots[self.id];
-
-        if slot.version().equals_saved(self.version) {
-            unsafe { Some(arena.remove_unchecked(index)) }
-        } else {
-            None
-        }
-    }
+    fn index(&self) -> usize { self.id }
 }
 
 impl<I, V: Version> BuildArenaKey<I, V> for Key<usize, V::Save> {
@@ -138,29 +87,13 @@ impl<I, V: Version> BuildArenaKey<I, V> for Key<usize, V::Save> {
 impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for Key<pui_vec::Id<I::Token>, V::Save> {
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
         let saved = self.version;
-        arena.ident().owns_token(self.id.token())
-            && arena
-                .slots
-                .get(self.id.get())
-                .map_or(false, |slot| slot.version().equals_saved(saved))
+        arena
+            .slots
+            .get(&self.id)
+            .map_or(false, |slot| slot.version().equals_saved(saved))
     }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T> { arena.slots[&self.id].get_with(self.version) }
-
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T> {
-        arena.slots[&self.id].get_mut_with(self.version)
-    }
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T> {
-        let index = self.id.get();
-        let slot = &mut arena.slots[&self.id];
-
-        if slot.version().equals_saved(self.version) {
-            unsafe { Some(arena.remove_unchecked(index)) }
-        } else {
-            None
-        }
-    }
+    fn index(&self) -> usize { self.id.get() }
 }
 
 #[cfg(feature = "pui-core")]
@@ -215,13 +148,31 @@ impl<T, I, V: Version> Arena<T, I, V> {
             .expect("Could not remove form an `Arena` using a stale `Key`")
     }
 
-    pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> { key.try_remove(self) }
-
     pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { key.contained_in(self) }
 
-    pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> { key.get(self) }
+    pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> {
+        if self.contains(&key) {
+            Some(unsafe { self.remove_unchecked(key.index()) })
+        } else {
+            None
+        }
+    }
 
-    pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> { key.get_mut(self) }
+    pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> {
+        if self.contains(&key) {
+            unsafe { Some(self.slots.get_unchecked(key.index()).get_unchecked()) }
+        } else {
+            None
+        }
+    }
+
+    pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> {
+        if self.contains(&key) {
+            unsafe { Some(self.slots.get_unchecked_mut(key.index()).get_mut_unchecked()) }
+        } else {
+            None
+        }
+    }
 
     pub fn remove_all(&mut self) { self.retain(|_| false) }
 

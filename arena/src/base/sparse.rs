@@ -19,25 +19,17 @@ impl TrustedIndex {
 pub trait ArenaAccess<I, V: Version> {
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool;
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T>;
+    fn index(&self) -> usize;
+}
 
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T>;
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T>;
+pub trait BuildArenaKey<I, V: Version>: ArenaAccess<I, V> {
+    unsafe fn new_unchecked(index: usize, save: V::Save, ident: &I) -> Self;
 }
 
 impl<K: ?Sized + ArenaAccess<I, V>, I, V: Version> ArenaAccess<I, V> for &K {
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool { K::contained_in(self, arena) }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T> { K::get(self, arena) }
-
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T> { K::get_mut(self, arena) }
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T> { K::try_remove(self, arena) }
-}
-
-pub trait BuildArenaKey<I, V: Version> {
-    unsafe fn new_unchecked(index: usize, save: V::Save, ident: &I) -> Self;
+    fn index(&self) -> usize { K::index(self) }
 }
 
 impl<I, V: Version> ArenaAccess<I, V> for usize {
@@ -45,13 +37,7 @@ impl<I, V: Version> ArenaAccess<I, V> for usize {
         arena.slots.get(*self).map_or(false, |slot| slot.version.is_full())
     }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T> { arena.slots[self].get() }
-
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T> { arena.slots[self].get_mut() }
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T> {
-        arena.slots[self].remove(*self, &mut arena.next)
-    }
+    fn index(&self) -> usize { *self }
 }
 
 impl<I, V: Version> BuildArenaKey<I, V> for usize {
@@ -63,17 +49,7 @@ impl<I, V: Version> ArenaAccess<I, V> for TrustedIndex {
         unsafe { arena.slots.get_unchecked(self.0).version.is_full() }
     }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T> {
-        unsafe { arena.slots.get_unchecked(self.0) }.get()
-    }
-
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T> {
-        unsafe { arena.slots.get_unchecked_mut(self.0) }.get_mut()
-    }
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T> {
-        unsafe { arena.slots.get_unchecked_mut(self.0) }.remove(self.0, &mut arena.next)
-    }
+    fn index(&self) -> usize { self.0 }
 }
 
 #[cfg(feature = "pui-core")]
@@ -82,14 +58,7 @@ impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for pui_vec::
         arena.ident().owns_token(self.token()) && arena.slots[self].version.is_full()
     }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T> { arena.slots[self].get() }
-
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T> { arena.slots[self].get_mut() }
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T> {
-        let index = pui_vec::PuiVecIndex::<I>::slice_index(&self);
-        arena.slots[self].remove(index, &mut arena.next)
-    }
+    fn index(&self) -> usize { self.get() }
 }
 
 #[cfg(feature = "pui-core")]
@@ -108,15 +77,7 @@ impl<I, V: Version> ArenaAccess<I, V> for Key<usize, V::Save> {
             .map_or(false, |slot| slot.version.equals_saved(version))
     }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T> { arena.slots[self.id].get_with(self.version) }
-
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T> {
-        arena.slots[self.id].get_mut_with(self.version)
-    }
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T> {
-        arena.slots[self.id].remove_with(self.version, self.id, &mut arena.next)
-    }
+    fn index(&self) -> usize { self.id }
 }
 
 impl<I, V: Version> BuildArenaKey<I, V> for Key<usize, V::Save> {
@@ -134,15 +95,7 @@ impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for Key<pui_v
                 .map_or(false, |slot| slot.version.equals_saved(version))
     }
 
-    fn get<'a, T>(&self, arena: &'a Arena<T, I, V>) -> Option<&'a T> { arena.slots[&self.id].get_with(self.version) }
-
-    fn get_mut<'a, T>(&self, arena: &'a mut Arena<T, I, V>) -> Option<&'a mut T> {
-        arena.slots[&self.id].get_mut_with(self.version)
-    }
-
-    fn try_remove<T>(&self, arena: &mut Arena<T, I, V>) -> Option<T> {
-        arena.slots[&self.id].remove_with(self.version, self.id.get(), &mut arena.next)
-    }
+    fn index(&self) -> usize { self.id.get() }
 }
 
 #[cfg(feature = "pui-core")]
@@ -191,54 +144,6 @@ impl<T, V: Version> Drop for Slot<T, V> {
 }
 
 impl<T, V: Version> Slot<T, V> {
-    fn get(&self) -> Option<&T> {
-        if self.version.is_full() {
-            Some(unsafe { &*self.data.value })
-        } else {
-            None
-        }
-    }
-
-    fn get_mut(&mut self) -> Option<&mut T> {
-        if self.version.is_full() {
-            Some(unsafe { &mut *self.data.value })
-        } else {
-            None
-        }
-    }
-
-    fn get_with(&self, saved: V::Save) -> Option<&T> {
-        if self.version.equals_saved(saved) {
-            Some(unsafe { &*self.data.value })
-        } else {
-            None
-        }
-    }
-
-    fn get_mut_with(&mut self, saved: V::Save) -> Option<&mut T> {
-        if self.version.equals_saved(saved) {
-            Some(unsafe { &mut *self.data.value })
-        } else {
-            None
-        }
-    }
-
-    fn remove(&mut self, index: usize, next: &mut usize) -> Option<T> {
-        if self.version.is_full() {
-            Some(unsafe { self.remove_unchecked(index, next) })
-        } else {
-            None
-        }
-    }
-
-    fn remove_with(&mut self, saved: V::Save, index: usize, next: &mut usize) -> Option<T> {
-        if self.version.equals_saved(saved) {
-            Some(unsafe { self.remove_unchecked(index, next) })
-        } else {
-            None
-        }
-    }
-
     unsafe fn remove_unchecked(&mut self, index: usize, next: &mut usize) -> T {
         let value = ManuallyDrop::take(&mut self.data.value);
         if let Some(next_version) = self.version.mark_empty() {
@@ -368,19 +273,50 @@ impl<T, I, V: Version> Arena<T, I, V> {
             .expect("Could not remove form an `Arena` using a stale `Key`")
     }
 
-    pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> { key.try_remove(self) }
-
     pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { key.contained_in(self) }
 
-    pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> { key.get(self) }
+    pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> {
+        if self.contains(&key) {
+            let index = key.index();
+            Some(unsafe {
+                self.slots
+                    .get_unchecked_mut(index)
+                    .remove_unchecked(index, &mut self.next)
+            })
+        } else {
+            None
+        }
+    }
 
-    pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> { key.get_mut(self) }
+    pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> {
+        if self.contains(&key) {
+            unsafe {
+                let index = key.index();
+                let slot = self.slots.get_unchecked(index);
+                Some(&*slot.data.value)
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> {
+        if self.contains(&key) {
+            unsafe {
+                let index = key.index();
+                let slot = self.slots.get_unchecked_mut(index);
+                Some(&mut *slot.data.value)
+            }
+        } else {
+            None
+        }
+    }
 
     pub fn remove_all(&mut self) { self.retain(|_| false) }
 
     pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
         for i in 0..self.slots.len() {
-            match TrustedIndex(i).get_mut(self) {
+            match self.get_mut(TrustedIndex(i)) {
                 Some(value) => unsafe {
                     if !f(value) {
                         self.slots.get_unchecked_mut(i).remove_unchecked(i, &mut self.next);

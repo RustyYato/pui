@@ -141,38 +141,6 @@ impl<T, V: Version> Slot<T, V> {
     pub(super) fn is_occupied(&self) -> bool { self.version.is_full() }
 
     pub(super) fn is_vacant(&self) -> bool { self.version.is_empty() }
-
-    pub(super) fn get(&self) -> Option<&T> {
-        if self.version.is_full() {
-            Some(unsafe { &*self.data.value })
-        } else {
-            None
-        }
-    }
-
-    pub(super) fn get_mut(&mut self) -> Option<&mut T> {
-        if self.version.is_full() {
-            Some(unsafe { &mut *self.data.value })
-        } else {
-            None
-        }
-    }
-
-    pub(super) fn get_with(&self, saved: V::Save) -> Option<&T> {
-        if self.version.equals_saved(saved) {
-            Some(unsafe { &*self.data.value })
-        } else {
-            None
-        }
-    }
-
-    pub(super) fn get_mut_with(&mut self, saved: V::Save) -> Option<&mut T> {
-        if self.version.equals_saved(saved) {
-            Some(unsafe { &mut *self.data.value })
-        } else {
-            None
-        }
-    }
 }
 
 impl<'a, T, I, V: Version> VacantEntry<'a, T, I, V> {
