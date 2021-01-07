@@ -134,14 +134,14 @@ impl<T, I, V: Version> Arena<T, I, V> {
             // remove element from vec
             let last = self.values.len().wrapping_sub(1);
             let ptr = self.values.as_mut_ptr();
-            core::mem::swap(&mut *ptr.add(last), &mut *ptr.add(index));
-            value = ptr.add(last).read();
+            value = ptr.add(index).read();
+            ptr.add(index).copy_from_nonoverlapping(ptr.add(last), 1);
             self.values.set_len(last);
 
             // remove back ref to slot
             let ptr = self.keys.as_mut_ptr();
-            core::mem::swap(&mut *ptr.add(last), &mut *ptr.add(index));
-            let back_ref = ptr.add(index).cast::<usize>().read();
+            let back_ref = *ptr.add(last).cast::<usize>();
+            ptr.add(last).copy_from_nonoverlapping(ptr.add(index), 1);
             end = crate::base::sparse::TrustedIndex::new(back_ref);
         }
 
