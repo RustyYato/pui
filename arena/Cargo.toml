@@ -16,3 +16,21 @@ scoped = ['pui']
 [dependencies]
 pui-core = { path = '../core', default-features = false, optional = true }
 pui-vec = { path = '../vec' }
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "sparse"
+path = "benchmark/sparse.rs"
+harness = false
+
+[[bench]]
+name = "dense"
+path = "benchmark/dense.rs"
+harness = false
+
+[[bench]]
+name = "hop"
+path = "benchmark/hop.rs"
+harness = false
