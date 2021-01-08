@@ -3,6 +3,12 @@
 // FIXME - remove this when documenting all features
 #![allow(clippy::missing_safety_doc)]
 
+//! `pui-core` provides process unique identifiers. These identifiers, as the name
+//! suggests are unique within the process they reside in. `pui-core` also provides
+//! thread-local unique identifiers that are unique within the thread they reside in.
+//!
+//!
+
 #[cfg(all(not(feature = "std"), feature = "alloc",))]
 extern crate alloc as std;
 
@@ -11,6 +17,7 @@ pub mod export;
 pub mod pool;
 pub mod scalar;
 
+pub mod anonomous;
 pub mod dynamic;
 pub mod scoped;
 
@@ -31,7 +38,8 @@ pub unsafe trait OneShotIdentifier: Identifier {}
 pub unsafe trait Identifier {
     type Token: Token;
 
-    fn owns_token(&self, token: &Self::Token) -> bool;
+    #[inline]
+    fn owns_token(&self, token: &Self::Token) -> bool { self.token() == *token }
 
     fn token(&self) -> Self::Token;
 }
