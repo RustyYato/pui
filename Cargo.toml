@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    'pui',
     'core',
     'cell',
     'vec',
