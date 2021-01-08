@@ -292,9 +292,10 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { key.contained_in(self) }
 
+    #[track_caller]
     pub fn remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> T {
         self.try_remove(key)
-            .expect("Could not remove form an `Arena` using a stale `Key`")
+            .expect("Could not remove from an `Arena` using a stale `Key`")
     }
 
     pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> {
@@ -436,10 +437,12 @@ impl<T, I, V: Version> IntoIterator for Arena<T, I, V> {
 impl<T, I, V: Version, K: ArenaAccess<I, V>> Index<K> for Arena<T, I, V> {
     type Output = T;
 
+    #[track_caller]
     fn index(&self, key: K) -> &Self::Output { self.get(key).expect("Tried to access `Arena` with a stale `Key`") }
 }
 
 impl<T, I, V: Version, K: ArenaAccess<I, V>> IndexMut<K> for Arena<T, I, V> {
+    #[track_caller]
     fn index_mut(&mut self, key: K) -> &mut Self::Output {
         self.get_mut(key).expect("Tried to access `Arena` with a stale `Key`")
     }
