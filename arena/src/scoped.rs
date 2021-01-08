@@ -48,6 +48,8 @@ macro_rules! imp_scoped {
             pub fn keys(&self) -> Keys<'_, 'scope $(, $keys)?, V> { self.0.keys() }
             pub fn iter(&self) -> Iter<'_, T $(, $version)?> { self.0.iter() }
             pub fn iter_mut(&mut self) -> IterMut<'_, T $(, $version)?> { self.0.iter_mut() }
+            pub fn drain(&mut self) -> Drain<'_, 'scope, T, V> { self.0.drain() }
+            pub fn drain_filter<F: FnMut(&mut T) -> bool>(&mut self, filter: F) -> DrainFilter<'_, 'scope, T, F, V> { self.0.drain_filter(filter) }
             pub fn entries(&self) -> Entries<'_, 'scope, T, V> { self.0.entries() }
             pub fn entries_mut(&mut self) -> EntriesMut<'_, 'scope, T, V> { self.0.entries_mut() }
             pub fn into_entries(self) -> IntoEntries<'scope, T, V> { self.0.into_entries() }
@@ -80,6 +82,9 @@ macro_rules! imp_scoped {
             pub type IterMut<'a, T, V = crate::version::DefaultVersion> = imp::IterMut<'a, T, V>;
             pub type IntoIter<T, V = crate::version::DefaultVersion> = imp::IntoIter<T, V>;
 
+            pub type Drain<'a, 'scope, T, V = crate::version::DefaultVersion> = imp::Drain<'a, T, V>;
+            pub type DrainFilter<'a, 'scope, T, F, V = crate::version::DefaultVersion> = imp::DrainFilter<'a, T, V, F>;
+
             pub type Keys<'a, 'scope, T, V = crate::version::DefaultVersion> = imp::Keys<'a, T, pui_core::scoped::Scoped<'scope>, V, Key<'scope, V>>;
 
             imp_scoped! {
@@ -99,6 +104,9 @@ macro_rules! imp_scoped {
             pub type IterMut<'a, T, V = crate::version::DefaultVersion> = imp::IterMut<'a, T, V>;
             pub type IntoIter<T, V = crate::version::DefaultVersion> = imp::IntoIter<T, V>;
 
+            pub type Drain<'a, 'scope, T, V = crate::version::DefaultVersion> = imp::Drain<'a, T, pui_core::scoped::Scoped<'scope>, V>;
+            pub type DrainFilter<'a, 'scope, T, F, V = crate::version::DefaultVersion> = imp::DrainFilter<'a, T, pui_core::scoped::Scoped<'scope>, V, F>;
+
             pub type Keys<'a, 'scope, T, V = crate::version::DefaultVersion> = imp::Keys<'a, T, pui_core::scoped::Scoped<'scope>, V, Key<'scope, V>>;
 
             imp_scoped! {
@@ -117,6 +125,9 @@ macro_rules! imp_scoped {
             pub type Iter<'a, T> = core::slice::Iter<'a, T>;
             pub type IterMut<'a, T> = core::slice::IterMut<'a, T>;
             pub type IntoIter<T> = std::vec::IntoIter<T>;
+
+            pub type Drain<'a, 'scope, T, V = crate::version::DefaultVersion> = imp::Drain<'a, T, pui_core::scoped::Scoped<'scope>, V>;
+            pub type DrainFilter<'a, 'scope, T, F, V = crate::version::DefaultVersion> = imp::DrainFilter<'a, T, pui_core::scoped::Scoped<'scope>, V, F>;
 
             pub type Keys<'a, 'scope, V = crate::version::DefaultVersion> = imp::Keys<'a, pui_core::scoped::Scoped<'scope>, V, Key<'scope, V>>;
 

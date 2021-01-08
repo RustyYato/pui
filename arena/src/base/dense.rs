@@ -118,7 +118,10 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> {
         let index = self.slots.try_remove(key)?;
+        Some(self.remove_unchecked(index))
+    }
 
+    fn remove_unchecked(&mut self, index: usize) -> T {
         if self.values.is_empty() {
             unsafe { core::hint::unreachable_unchecked() }
         }
@@ -126,7 +129,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
         if index == self.values.len().wrapping_sub(1) {
             unsafe {
                 self.values.set_len(index);
-                return Some(self.values.as_ptr().add(index).read())
+                return self.values.as_ptr().add(index).read()
             }
         }
 
@@ -148,7 +151,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
             *self.slots.get_unchecked_mut(back_ref) = index;
         }
 
-        Some(value)
+        value
     }
 
     pub fn delete<K: ArenaAccess<I, V>>(&mut self, key: K) -> bool {
@@ -250,16 +253,32 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
-    pub fn iter(&self) -> core::slice::Iter<'_, T> { self.values.iter() }
-
-    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> { self.values.iter_mut() }
-
     pub fn keys<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> Keys<'_, I, V, K> {
         unsafe { keys(&self.keys, self.values.len(), &self.slots) }
     }
 
     pub fn into_keys<'a, K: 'a + BuildArenaKey<I, V>>(self) -> IntoKeys<I, V, K> {
         unsafe { into_keys(self.keys, self.values.len(), self.slots) }
+    }
+
+    pub fn iter(&self) -> core::slice::Iter<'_, T> { self.values.iter() }
+
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> { self.values.iter_mut() }
+
+    pub fn drain(&mut self) -> Drain<'_, T, I, V> {
+        Drain {
+            range: 0..self.values.len(),
+            arena: self,
+        }
+    }
+
+    pub fn drain_filter<F: FnMut(&mut T) -> bool>(&mut self, filter: F) -> DrainFilter<'_, T, I, V, F> {
+        DrainFilter {
+            range: 0..self.values.len(),
+            arena: self,
+            filter,
+            panicked: false,
+        }
     }
 
     pub fn entries<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> Entries<'_, T, I, V, K> {
@@ -435,6 +454,97 @@ impl<I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for IntoKeys<I, 
 
 impl<I, V: Version, K: BuildArenaKey<I, V>> ExactSizeIterator for IntoKeys<I, V, K> {}
 impl<I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for IntoKeys<I, V, K> {}
+
+pub struct Drain<'a, T, I, V: Version> {
+    arena: &'a mut Arena<T, I, V>,
+    range: core::ops::Range<usize>,
+}
+
+impl<T, I, V: Version> Drop for Drain<'_, T, I, V> {
+    fn drop(&mut self) { self.for_each(drop); }
+}
+
+impl<'a, T, I, V: Version> Iterator for Drain<'a, T, I, V> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let index = self.range.next()?;
+        unsafe {
+            let key = self.arena.keys.get_unchecked(index).as_ptr().read();
+            if !self.arena.slots.delete(key) {
+                core::hint::unreachable_unchecked()
+            }
+            Some(self.arena.remove_unchecked(index))
+        }
+    }
+}
+
+impl<T, I, V: Version> DoubleEndedIterator for Drain<'_, T, I, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let index = self.range.next_back()?;
+        unsafe {
+            let key = self.arena.keys.get_unchecked(index).as_ptr().read();
+            if !self.arena.slots.delete(key) {
+                core::hint::unreachable_unchecked()
+            }
+            Some(self.arena.remove_unchecked(index))
+        }
+    }
+}
+
+pub struct DrainFilter<'a, T, I, V: Version, F: FnMut(&mut T) -> bool> {
+    arena: &'a mut Arena<T, I, V>,
+    range: core::ops::Range<usize>,
+    filter: F,
+    panicked: bool,
+}
+
+impl<T, I, V: Version, F: FnMut(&mut T) -> bool> Drop for DrainFilter<'_, T, I, V, F> {
+    fn drop(&mut self) {
+        if !self.panicked {
+            self.for_each(drop);
+        }
+    }
+}
+
+impl<'a, T, I, V: Version, F: FnMut(&mut T) -> bool> Iterator for DrainFilter<'a, T, I, V, F> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let index = self.range.next()?;
+            unsafe {
+                let panicked = crate::SetOnDrop(&mut self.panicked);
+                let do_filter = (self.filter)(self.arena.values.get_unchecked_mut(index));
+                panicked.defuse();
+                if do_filter {
+                    let key = self.arena.keys.get_unchecked(index).as_ptr().read();
+                    if !self.arena.slots.delete(key) {
+                        core::hint::unreachable_unchecked()
+                    }
+                    return Some(self.arena.remove_unchecked(index))
+                }
+            }
+        }
+    }
+}
+
+impl<T, I, V: Version, F: FnMut(&mut T) -> bool> DoubleEndedIterator for DrainFilter<'_, T, I, V, F> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        loop {
+            let index = self.range.next_back()?;
+            unsafe {
+                if (self.filter)(self.arena.values.get_unchecked_mut(index)) {
+                    let key = self.arena.keys.get_unchecked(index).as_ptr().read();
+                    if !self.arena.slots.delete(key) {
+                        core::hint::unreachable_unchecked()
+                    }
+                    return Some(self.arena.remove_unchecked(index))
+                }
+            }
+        }
+    }
+}
 
 macro_rules! entry_impl {
     () => {

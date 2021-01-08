@@ -268,6 +268,22 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    pub fn drain(&mut self) -> Drain<'_, T, I, V> {
+        Drain {
+            range: 0..self.slots.len(),
+            arena: self,
+        }
+    }
+
+    pub fn drain_filter<F: FnMut(&mut T) -> bool>(&mut self, filter: F) -> DrainFilter<'_, T, I, V, F> {
+        DrainFilter {
+            range: 0..self.slots.len(),
+            arena: self,
+            filter,
+            panicked: false,
+        }
+    }
+
     pub fn entries<K: BuildArenaKey<I, V>>(&self) -> Entries<'_, T, I, V, K> {
         Entries {
             slots: Occupied {
@@ -474,6 +490,113 @@ impl<T, V: Version> DoubleEndedIterator for IntoIter<T, V> {
 }
 impl<T, V: Version> ExactSizeIterator for IntoIter<T, V> {}
 impl<T, V: Version> core::iter::FusedIterator for IntoIter<T, V> {}
+
+pub struct Drain<'a, T, I, V: Version> {
+    arena: &'a mut Arena<T, I, V>,
+    range: core::ops::Range<usize>,
+}
+
+impl<T, I, V: Version> Drop for Drain<'_, T, I, V> {
+    fn drop(&mut self) { self.for_each(drop); }
+}
+
+impl<'a, T, I, V: Version> Iterator for Drain<'a, T, I, V> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe {
+            let mut index = self.range.next()?;
+
+            let slot = self.arena.slots.get_unchecked_mut(index);
+            if slot.is_vacant() {
+                self.range.start = slot.other_end();
+                index = self.range.next()?;
+            }
+
+            Some(self.arena.remove_unchecked(index))
+        }
+    }
+}
+
+impl<T, I, V: Version> DoubleEndedIterator for Drain<'_, T, I, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        unsafe {
+            let mut index = self.range.next_back()?;
+
+            let slot = self.arena.slots.get_unchecked_mut(index);
+            if slot.is_vacant() {
+                self.range.start = slot.other_end();
+                index = self.range.next_back()?;
+            }
+
+            Some(self.arena.remove_unchecked(index))
+        }
+    }
+}
+
+pub struct DrainFilter<'a, T, I, V: Version, F: FnMut(&mut T) -> bool> {
+    arena: &'a mut Arena<T, I, V>,
+    range: core::ops::Range<usize>,
+    filter: F,
+    panicked: bool,
+}
+
+impl<T, I, V: Version, F: FnMut(&mut T) -> bool> Drop for DrainFilter<'_, T, I, V, F> {
+    fn drop(&mut self) {
+        if !self.panicked {
+            self.for_each(drop);
+        }
+    }
+}
+
+impl<'a, T, I, V: Version, F: FnMut(&mut T) -> bool> Iterator for DrainFilter<'a, T, I, V, F> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            unsafe {
+                let mut index = self.range.next()?;
+
+                let slot = self.arena.slots.get_unchecked_mut(index);
+                if slot.is_vacant() {
+                    self.range.start = slot.other_end();
+                    index = self.range.next()?;
+                }
+
+                let value = self.arena.slots.get_unchecked_mut(index).get_mut_unchecked();
+
+                let panicked = crate::SetOnDrop(&mut self.panicked);
+                let return_value = (self.filter)(value);
+                panicked.defuse();
+                if return_value {
+                    return Some(self.arena.remove_unchecked(index))
+                }
+            }
+        }
+    }
+}
+
+impl<T, I, V: Version, F: FnMut(&mut T) -> bool> DoubleEndedIterator for DrainFilter<'_, T, I, V, F> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        loop {
+            unsafe {
+                let mut index = self.range.next_back()?;
+
+                let slot = self.arena.slots.get_unchecked_mut(index);
+                if slot.is_vacant() {
+                    self.range.start = slot.other_end();
+                    index = self.range.next_back()?;
+                }
+
+                let value = self.arena.slots.get_unchecked_mut(index).get_mut_unchecked();
+
+                if (self.filter)(value) {
+                    return Some(self.arena.remove_unchecked(index))
+                }
+            }
+        }
+    }
+}
 
 pub struct Entries<'a, T, I, V: Version, K> {
     slots: Occupied<'a, T, V>,

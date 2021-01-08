@@ -64,6 +64,10 @@ macro_rules! imp_slot_map {
 
             pub fn iter_mut(&mut self) -> IterMut<'_, T> { self.0.iter_mut() }
 
+            pub fn drain(&mut self) -> Drain<'_, T> { self.0.drain() }
+
+            pub fn drain_filter<F: FnMut(&mut T) -> bool>(&mut self, filter: F) -> DrainFilter<'_, T, F> { self.0.drain_filter(filter) }
+
             pub fn entries(&self) -> Entries<'_, T> { self.0.entries() }
 
             pub fn entries_mut(&mut self) -> EntriesMut<'_, T> { self.0.entries_mut() }

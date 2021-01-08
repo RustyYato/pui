@@ -386,6 +386,26 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    pub fn drain(&mut self) -> Drain<'_, T, V> {
+        Drain {
+            slots: Occupied {
+                slots: self.slots.iter_mut().enumerate(),
+            },
+            next: &mut self.next,
+        }
+    }
+
+    pub fn drain_filter<F: FnMut(&mut T) -> bool>(&mut self, filter: F) -> DrainFilter<'_, T, V, F> {
+        DrainFilter {
+            slots: Occupied {
+                slots: self.slots.iter_mut().enumerate(),
+            },
+            next: &mut self.next,
+            filter,
+            panicked: false,
+        }
+    }
+
     pub fn entries<K: BuildArenaKey<I, V>>(&self) -> Entries<'_, T, I, V, K> {
         let ident = self.ident();
 
@@ -628,6 +648,90 @@ impl<T, V: Version> DoubleEndedIterator for IntoIter<T, V> {
             let mut slot = ManuallyDrop::new(slot);
             ManuallyDrop::take(&mut slot.data.value)
         })
+    }
+}
+
+pub struct Drain<'a, T, V: Version> {
+    slots: Occupied<core::iter::Enumerate<core::slice::IterMut<'a, Slot<T, V>>>>,
+    next: &'a mut usize,
+}
+
+impl<T, V: Version> Drop for Drain<'_, T, V> {
+    fn drop(&mut self) { self.for_each(drop); }
+}
+
+impl<'a, T, V: Version> Iterator for Drain<'a, T, V> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = &mut *self.next;
+        self.slots
+            .next()
+            .map(|(index, slot)| unsafe { slot.remove_unchecked(index, next) })
+    }
+}
+
+impl<T, V: Version> DoubleEndedIterator for Drain<'_, T, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let next = &mut *self.next;
+        self.slots
+            .next_back()
+            .map(|(index, slot)| unsafe { slot.remove_unchecked(index, next) })
+    }
+}
+
+pub struct DrainFilter<'a, T, V: Version, F: FnMut(&mut T) -> bool> {
+    slots: Occupied<core::iter::Enumerate<core::slice::IterMut<'a, Slot<T, V>>>>,
+    next: &'a mut usize,
+    filter: F,
+    panicked: bool,
+}
+
+impl<T, V: Version, F: FnMut(&mut T) -> bool> Drop for DrainFilter<'_, T, V, F> {
+    fn drop(&mut self) {
+        if !self.panicked {
+            self.for_each(drop);
+        }
+    }
+}
+
+impl<'a, T, V: Version, F: FnMut(&mut T) -> bool> Iterator for DrainFilter<'a, T, V, F> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let filter = &mut self.filter;
+        let panicked = &mut self.panicked;
+        let (index, slot) = self
+            .slots
+            .try_fold((), |(), (index, slot)| {
+                let panicked = crate::SetOnDrop(panicked);
+                let return_value = filter(unsafe { &mut *slot.data.value });
+                panicked.defuse();
+                if return_value {
+                    Err((index, slot))
+                } else {
+                    Ok(())
+                }
+            })
+            .err()?;
+        Some(unsafe { slot.remove_unchecked(index, self.next) })
+    }
+}
+
+impl<T, V: Version, F: FnMut(&mut T) -> bool> DoubleEndedIterator for DrainFilter<'_, T, V, F> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let filter = &mut self.filter;
+        let (index, slot) = self
+            .slots
+            .try_rfold((), |(), (index, slot)| {
+                if filter(unsafe { &mut *slot.data.value }) {
+                    Err((index, slot))
+                } else {
+                    Ok(())
+                }
+            })
+            .err()?;
+        Some(unsafe { slot.remove_unchecked(index, self.next) })
     }
 }
 

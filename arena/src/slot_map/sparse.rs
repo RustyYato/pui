@@ -9,6 +9,9 @@ pub type Iter<'a, T> = imp::Iter<'a, T, DefaultVersion>;
 pub type IterMut<'a, T> = imp::IterMut<'a, T, DefaultVersion>;
 pub type IntoIter<T> = imp::IntoIter<T, DefaultVersion>;
 
+pub type Drain<'a, T> = imp::Drain<'a, T, DefaultVersion>;
+pub type DrainFilter<'a, T, F> = imp::DrainFilter<'a, T, DefaultVersion, F>;
+
 imp_slot_map! {
     new const: Arena::INIT,
     slots: slots

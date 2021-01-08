@@ -30,6 +30,16 @@ impl TrustedIndex {
     pub unsafe fn new(index: usize) -> Self { Self(index) }
 }
 
+pub struct SetOnDrop<'a>(&'a mut bool);
+
+impl Drop for SetOnDrop<'_> {
+    fn drop(&mut self) { *self.0 = true; }
+}
+
+impl SetOnDrop<'_> {
+    fn defuse(self) { core::mem::forget(self) }
+}
+
 #[macro_export]
 #[cfg(feature = "pui")]
 macro_rules! newtype {
@@ -132,6 +142,8 @@ macro_rules! __newtype {
             pub fn keys(&self) -> Keys<'_ $(, $keys)?> { self.0.keys() }
             pub fn iter(&self) -> Iter<'_, T> { self.0.iter() }
             pub fn iter_mut(&mut self) -> IterMut<'_, T> { self.0.iter_mut() }
+            pub fn drain(&mut self) -> Drain<'_, T> { self.0.drain() }
+            pub fn drain_filter<F: FnMut(&mut T) -> bool>(&mut self, filter: F) -> DrainFilter<'_, T, F> { self.0.drain_filter(filter) }
             pub fn entries(&self) -> Entries<'_, T> { self.0.entries() }
             pub fn entries_mut(&mut self) -> EntriesMut<'_, T> { self.0.entries_mut() }
             pub fn into_entries(self) -> IntoEntries<T> { self.0.into_entries() }
@@ -165,6 +177,9 @@ macro_rules! __newtype {
             $item_vis type IterMut<'a, T> = imp::IterMut<'a, T, Version>;
             $item_vis type IntoIter<T> = imp::IntoIter<T, Version>;
 
+            $item_vis type Drain<'a, T> = imp::Drain<'a, T, Version>;
+            $item_vis type DrainFilter<'a, T, F> = imp::DrainFilter<'a, T, Version, F>;
+
             $item_vis type Keys<'a, T> = imp::Keys<'a, T, Identifier, Version, Key>;
 
             $crate::__newtype! {
@@ -176,7 +191,6 @@ macro_rules! __newtype {
         }
 
         $mod_vis mod hop {
-            type DV = $crate::version::DefaultVersion;
             use $crate::core::ops::*;
             use $crate::base::hop as imp;
             use $crate::base::hop as key;
@@ -185,6 +199,9 @@ macro_rules! __newtype {
             $item_vis type Iter<'a, T> = imp::Iter<'a, T, Version>;
             $item_vis type IterMut<'a, T> = imp::IterMut<'a, T, Version>;
             $item_vis type IntoIter<T> = imp::IntoIter<T, Version>;
+
+            $item_vis type Drain<'a, T> = imp::Drain<'a, T, Identifier, Version>;
+            $item_vis type DrainFilter<'a, T, F> = imp::DrainFilter<'a, T, Identifier, Version, F>;
 
             $item_vis type Keys<'a, T> = imp::Keys<'a, T, Identifier, Version, Key>;
 
@@ -197,7 +214,6 @@ macro_rules! __newtype {
         }
 
         $mod_vis mod dense {
-            type DV = $crate::version::DefaultVersion;
             use $crate::core::ops::*;
             use $crate::base::dense as imp;
             use $crate::base::sparse as key;
@@ -206,6 +222,9 @@ macro_rules! __newtype {
             $item_vis type Iter<'a, T> = $crate::core::slice::Iter<'a, T>;
             $item_vis type IterMut<'a, T> = $crate::core::slice::IterMut<'a, T>;
             $item_vis type IntoIter<T> = $crate::std::vec::IntoIter<T>;
+
+            $item_vis type Drain<'a, T> = imp::Drain<'a, T, Identifier, Version>;
+            $item_vis type DrainFilter<'a, T, F> = imp::DrainFilter<'a, T, Identifier, Version, F>;
 
             $item_vis type Keys<'a> = imp::Keys<'a, Identifier, Version, Key>;
 
