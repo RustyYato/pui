@@ -125,6 +125,18 @@ impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for Key<pui
     }
 }
 
+impl<Id, V> Key<Id, V> {
+    pub fn new(id: Id, version: V) -> Self { Self { id, version } }
+
+    pub const fn id(&self) -> &Id { &self.id }
+
+    pub const fn version(&self) -> &V { &self.version }
+}
+
+impl<T> Default for Arena<T> {
+    fn default() -> Self { Self::new() }
+}
+
 impl<T> Arena<T> {
     pub fn new() -> Self { Self::with_ident(()) }
 }

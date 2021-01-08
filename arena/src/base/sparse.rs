@@ -179,6 +179,14 @@ impl<T, V: Version> Slot<T, V> {
     }
 }
 
+impl<Id, V> Key<Id, V> {
+    pub fn new(id: Id, version: V) -> Self { Self { id, version } }
+
+    pub const fn id(&self) -> &Id { &self.id }
+
+    pub const fn version(&self) -> &V { &self.version }
+}
+
 impl<T> Default for Arena<T> {
     fn default() -> Self { Self::new() }
 }
@@ -214,12 +222,6 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn capacity(&self) -> usize { self.slots.capacity() }
 
     pub fn reserve(&mut self, additional: usize) { self.slots.reserve(additional) }
-}
-
-impl<Id, V> Key<Id, V> {
-    pub const fn id(&self) -> &Id { &self.id }
-
-    pub const fn version(&self) -> &V { &self.version }
 }
 
 impl<T, I, V: Version> VacantEntry<'_, T, I, V> {
