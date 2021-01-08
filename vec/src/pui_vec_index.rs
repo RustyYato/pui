@@ -362,9 +362,9 @@ impl Seal for usize {}
 impl<I> PuiVecIndex<I> for usize {
     type SliceIndex = Self;
 
-    fn contained_in<T>(&self, vec: &PuiVec<T, I>) -> bool { vec.vec.get(self.clone()).is_some() }
+    fn contained_in<T>(&self, vec: &PuiVec<T, I>) -> bool { vec.vec.get(*self).is_some() }
 
-    fn slice_index(&self) -> Self::SliceIndex { self.clone() }
+    fn slice_index(&self) -> Self::SliceIndex { *self }
 }
 
 impl<I> BuildPuiVecIndex<I> for usize {
@@ -374,12 +374,10 @@ impl<I> BuildPuiVecIndex<I> for usize {
 impl<T, I> PuiVecAccess<T, I> for usize {
     type Output = T;
 
-    unsafe fn get_unchecked<'a>(&self, vec: &'a PuiVec<T, I>) -> &'a Self::Output {
-        vec.vec.get_unchecked(self.clone())
-    }
+    unsafe fn get_unchecked<'a>(&self, vec: &'a PuiVec<T, I>) -> &'a Self::Output { vec.vec.get_unchecked(*self) }
 
     unsafe fn get_unchecked_mut<'a>(&self, vec: &'a mut PuiVec<T, I>) -> &'a mut Self::Output {
-        vec.vec.get_unchecked_mut(self.clone())
+        vec.vec.get_unchecked_mut(*self)
     }
 }
 
@@ -387,9 +385,9 @@ impl Seal for RangeFull {}
 impl<I> PuiVecIndex<I> for RangeFull {
     type SliceIndex = Self;
 
-    fn contained_in<T>(&self, vec: &PuiVec<T, I>) -> bool { vec.vec.get(self.clone()).is_some() }
+    fn contained_in<T>(&self, vec: &PuiVec<T, I>) -> bool { vec.vec.get(*self).is_some() }
 
-    fn slice_index(&self) -> Self::SliceIndex { self.clone() }
+    fn slice_index(&self) -> Self::SliceIndex { *self }
 }
 
 impl<I> BuildPuiVecIndex<I> for RangeFull {
@@ -399,12 +397,10 @@ impl<I> BuildPuiVecIndex<I> for RangeFull {
 impl<T, I> PuiVecAccess<T, I> for RangeFull {
     type Output = [T];
 
-    unsafe fn get_unchecked<'a>(&self, vec: &'a PuiVec<T, I>) -> &'a Self::Output {
-        vec.vec.get_unchecked(self.clone())
-    }
+    unsafe fn get_unchecked<'a>(&self, vec: &'a PuiVec<T, I>) -> &'a Self::Output { vec.vec.get_unchecked(*self) }
 
     unsafe fn get_unchecked_mut<'a>(&self, vec: &'a mut PuiVec<T, I>) -> &'a mut Self::Output {
-        vec.vec.get_unchecked_mut(self.clone())
+        vec.vec.get_unchecked_mut(*self)
     }
 }
 
@@ -412,9 +408,9 @@ impl Seal for RangeTo<usize> {}
 impl<I> PuiVecIndex<I> for RangeTo<usize> {
     type SliceIndex = Self;
 
-    fn contained_in<T>(&self, vec: &PuiVec<T, I>) -> bool { vec.vec.get(self.clone()).is_some() }
+    fn contained_in<T>(&self, vec: &PuiVec<T, I>) -> bool { vec.vec.get(*self).is_some() }
 
-    fn slice_index(&self) -> Self::SliceIndex { self.clone() }
+    fn slice_index(&self) -> Self::SliceIndex { *self }
 }
 
 impl<I> BuildPuiVecIndex<I> for RangeTo<usize> {
@@ -424,12 +420,10 @@ impl<I> BuildPuiVecIndex<I> for RangeTo<usize> {
 impl<T, I> PuiVecAccess<T, I> for RangeTo<usize> {
     type Output = [T];
 
-    unsafe fn get_unchecked<'a>(&self, vec: &'a PuiVec<T, I>) -> &'a Self::Output {
-        vec.vec.get_unchecked(self.clone())
-    }
+    unsafe fn get_unchecked<'a>(&self, vec: &'a PuiVec<T, I>) -> &'a Self::Output { vec.vec.get_unchecked(*self) }
 
     unsafe fn get_unchecked_mut<'a>(&self, vec: &'a mut PuiVec<T, I>) -> &'a mut Self::Output {
-        vec.vec.get_unchecked_mut(self.clone())
+        vec.vec.get_unchecked_mut(*self)
     }
 }
 
@@ -462,9 +456,9 @@ impl Seal for RangeToInclusive<usize> {}
 impl<I> PuiVecIndex<I> for RangeToInclusive<usize> {
     type SliceIndex = Self;
 
-    fn contained_in<T>(&self, vec: &PuiVec<T, I>) -> bool { vec.vec.get(self.clone()).is_some() }
+    fn contained_in<T>(&self, vec: &PuiVec<T, I>) -> bool { vec.vec.get(*self).is_some() }
 
-    fn slice_index(&self) -> Self::SliceIndex { self.clone() }
+    fn slice_index(&self) -> Self::SliceIndex { *self }
 }
 
 impl<I> BuildPuiVecIndex<I> for RangeToInclusive<usize> {
@@ -474,12 +468,10 @@ impl<I> BuildPuiVecIndex<I> for RangeToInclusive<usize> {
 impl<T, I> PuiVecAccess<T, I> for RangeToInclusive<usize> {
     type Output = [T];
 
-    unsafe fn get_unchecked<'a>(&self, vec: &'a PuiVec<T, I>) -> &'a Self::Output {
-        vec.vec.get_unchecked(self.clone())
-    }
+    unsafe fn get_unchecked<'a>(&self, vec: &'a PuiVec<T, I>) -> &'a Self::Output { vec.vec.get_unchecked(*self) }
 
     unsafe fn get_unchecked_mut<'a>(&self, vec: &'a mut PuiVec<T, I>) -> &'a mut Self::Output {
-        vec.vec.get_unchecked_mut(self.clone())
+        vec.vec.get_unchecked_mut(*self)
     }
 }
 

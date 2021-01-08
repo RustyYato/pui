@@ -2,6 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use pui_arena::base::dense::Arena;
 
+#[allow(clippy::many_single_char_names)]
 pub fn dense(c: &mut Criterion) {
     c.bench_function("dense insertion", |b| {
         b.iter(|| {

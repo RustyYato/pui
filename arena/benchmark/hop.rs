@@ -2,6 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use pui_arena::base::hop::Arena;
 
+#[allow(clippy::many_single_char_names)]
 pub fn hop(c: &mut Criterion) {
     c.bench_function("hop insertion", |b| {
         b.iter(|| {

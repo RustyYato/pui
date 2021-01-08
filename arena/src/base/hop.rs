@@ -159,6 +159,8 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn ident(&self) -> &I { self.slots.ident() }
 
+    pub fn is_empty(&self) -> bool { self.num_elements == 0 }
+
     pub fn len(&self) -> usize { self.num_elements }
 
     pub fn capacity(&self) -> usize { self.slots.capacity() }
@@ -719,6 +721,7 @@ mod test {
     }
 
     #[test]
+    #[allow(clippy::many_single_char_names)]
     fn zero_sized() {
         let mut arena = Arena::new();
 

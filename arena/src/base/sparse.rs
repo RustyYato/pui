@@ -207,23 +207,6 @@ impl<T, V: Version> Arena<T, (), V> {
     }
 }
 
-impl<T, I, V: Version> Arena<T, I, V> {
-    pub fn with_ident(ident: I) -> Self {
-        Self {
-            slots: PuiVec::new(ident),
-            next: 0,
-        }
-    }
-
-    pub fn ident(&self) -> &I { self.slots.ident() }
-
-    pub fn slots(&self) -> usize { self.slots.len() }
-
-    pub fn capacity(&self) -> usize { self.slots.capacity() }
-
-    pub fn reserve(&mut self, additional: usize) { self.slots.reserve(additional) }
-}
-
 impl<T, I, V: Version> VacantEntry<'_, T, I, V> {
     pub fn key<K: BuildArenaKey<I, V>>(&self) -> K {
         unsafe {
@@ -255,6 +238,21 @@ impl<T, I, V: Version> VacantEntry<'_, T, I, V> {
 }
 
 impl<T, I, V: Version> Arena<T, I, V> {
+    pub fn with_ident(ident: I) -> Self {
+        Self {
+            slots: PuiVec::new(ident),
+            next: 0,
+        }
+    }
+
+    pub fn ident(&self) -> &I { self.slots.ident() }
+
+    pub fn slots(&self) -> usize { self.slots.len() }
+
+    pub fn capacity(&self) -> usize { self.slots.capacity() }
+
+    pub fn reserve(&mut self, additional: usize) { self.slots.reserve(additional) }
+
     #[inline]
     pub fn parse_key<K: BuildArenaKey<I, V>>(&self, index: usize) -> Option<K> {
         let slot = self.slots.get(index)?;
@@ -361,13 +359,12 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
         for i in 0..self.slots.len() {
-            match self.get_mut(unsafe { crate::TrustedIndex::new(i) }) {
-                Some(value) => unsafe {
-                    if !f(value) {
+            if let Some(value) = self.get_mut(unsafe { crate::TrustedIndex::new(i) }) {
+                if !f(value) {
+                    unsafe {
                         self.slots.get_unchecked_mut(i).delete_unchecked(i, &mut self.next);
                     }
-                },
-                _ => (),
+                }
             }
         }
     }
@@ -479,6 +476,7 @@ impl<T, I, V: Version, K: ArenaAccess<I, V>> IndexMut<K> for Arena<T, I, V> {
 }
 
 impl<T, I, V: Version> Extend<T> for Arena<T, I, V> {
+    #[allow(clippy::drop_copy)]
     fn extend<Iter: IntoIterator<Item = T>>(&mut self, iter: Iter) {
         let iter = iter.into_iter();
         self.reserve(iter.size_hint().0);
@@ -879,6 +877,7 @@ mod test {
     }
 
     #[test]
+    #[allow(clippy::many_single_char_names)]
     fn zero_sized() {
         let mut arena = Arena::new();
 

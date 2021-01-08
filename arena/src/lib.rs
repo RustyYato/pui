@@ -1,4 +1,6 @@
 #![no_std]
+// FIXME - remove this when documenting all features
+#![allow(clippy::missing_safety_doc)]
 
 #[doc(hidden)]
 pub extern crate alloc as std;

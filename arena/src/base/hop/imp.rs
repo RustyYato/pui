@@ -267,7 +267,6 @@ unsafe fn remove_slot_from_freelist<T, V: Version>(slots: &mut [Slot<T, V>], ind
             // if this is the last element in the block
             mu_freelist(slots, free.next.assume_init()).prev = free.prev;
             mu_freelist(slots, free.prev.assume_init()).next = free.next;
-            return
         }
         // if there are more items in the block, and this is the *end* of the block
         // pop this node from the freelist
@@ -282,7 +281,7 @@ unsafe fn remove_slot_from_freelist<T, V: Version>(slots: &mut [Slot<T, V>], ind
         Ordering::Greater => {
             let index = index.wrapping_add(1);
 
-            *mu_freelist(slots, index) = free.into();
+            *mu_freelist(slots, index) = free;
             let index = MaybeUninit::new(index);
             mu_freelist(slots, free.other_end.assume_init()).other_end = index;
             mu_freelist(slots, free.next.assume_init()).prev = index;

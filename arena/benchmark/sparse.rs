@@ -2,6 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use pui_arena::base::sparse::Arena;
 
+#[allow(clippy::many_single_char_names)]
 pub fn sparse(c: &mut Criterion) {
     c.bench_function("sparse insertion", |b| {
         b.iter(|| {

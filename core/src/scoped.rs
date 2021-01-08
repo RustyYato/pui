@@ -40,7 +40,7 @@ pub struct Scoped<'a> {
     invariant: PhantomData<Invariant<'a>>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ScopedToken<'a> {
     invariant: PhantomData<Invariant<'a>>,
 }

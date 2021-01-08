@@ -33,11 +33,23 @@ pub struct DynamicToken<A: ScalarAllocator = Global> {
     auto: PhantomData<A::AutoTraits>,
 }
 
-impl<A: ScalarAllocator<Scalar = ()>> DynamicToken<A> {
+impl<A: ScalarAllocator<Scalar = ()>> Default for DynamicToken<A> {
     #[inline]
-    pub fn new() -> Self {
+    fn default() -> Self { Self::NEW }
+}
+
+impl<A: ScalarAllocator<Scalar = ()>> DynamicToken<A> {
+    pub const NEW: Self = Self {
+        scalar: (),
+        auto: PhantomData,
+    };
+}
+
+impl<A: ScalarAllocator> DynamicToken<A> {
+    #[inline]
+    pub fn new(scalar: A::Scalar) -> Self {
         Self {
-            scalar: (),
+            scalar,
             auto: PhantomData,
         }
     }
@@ -45,7 +57,7 @@ impl<A: ScalarAllocator<Scalar = ()>> DynamicToken<A> {
 
 impl Dynamic {
     #[inline]
-    pub fn new() -> Self { Self::with_pool(()) }
+    pub fn create() -> Self { Self::with_pool(()) }
 }
 
 impl<P: PoolMut<Global>> Dynamic<Global, P> {

@@ -1,4 +1,6 @@
 #![no_std]
+// FIXME - remove this when documenting all features
+#![allow(clippy::missing_safety_doc)]
 
 extern crate alloc as std;
 
@@ -42,6 +44,8 @@ impl<T, I> PuiVec<T, I> {
     pub const fn from_raw_parts(vec: Vec<T>, ident: I) -> Self { Self { vec, ident } }
 
     pub const fn ident(&self) -> &I { &self.ident }
+
+    pub fn is_empty(&self) -> bool { self.vec.is_empty() }
 
     pub fn len(&self) -> usize { self.vec.len() }
 

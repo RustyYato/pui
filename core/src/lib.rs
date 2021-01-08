@@ -1,4 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![allow(clippy::declare_interior_mutable_const)]
+// FIXME - remove this when documenting all features
+#![allow(clippy::missing_safety_doc)]
 
 #[cfg(all(not(feature = "std"), feature = "alloc",))]
 extern crate alloc as std;
