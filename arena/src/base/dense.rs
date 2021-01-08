@@ -471,9 +471,7 @@ impl<'a, T, I, V: Version> Iterator for Drain<'a, T, I, V> {
         let index = self.range.next()?;
         unsafe {
             let key = self.arena.keys.get_unchecked(index).as_ptr().read();
-            if !self.arena.slots.delete(key) {
-                core::hint::unreachable_unchecked()
-            }
+            self.arena.slots.delete_unchecked(key);
             Some(self.arena.remove_unchecked(index))
         }
     }
@@ -484,9 +482,7 @@ impl<T, I, V: Version> DoubleEndedIterator for Drain<'_, T, I, V> {
         let index = self.range.next_back()?;
         unsafe {
             let key = self.arena.keys.get_unchecked(index).as_ptr().read();
-            if !self.arena.slots.delete(key) {
-                core::hint::unreachable_unchecked()
-            }
+            self.arena.slots.delete_unchecked(key);
             Some(self.arena.remove_unchecked(index))
         }
     }
@@ -519,9 +515,7 @@ impl<'a, T, I, V: Version, F: FnMut(&mut T) -> bool> Iterator for DrainFilter<'a
                 panicked.defuse();
                 if do_filter {
                     let key = self.arena.keys.get_unchecked(index).as_ptr().read();
-                    if !self.arena.slots.delete(key) {
-                        core::hint::unreachable_unchecked()
-                    }
+                    self.arena.slots.delete_unchecked(key);
                     return Some(self.arena.remove_unchecked(index))
                 }
             }
@@ -536,9 +530,7 @@ impl<T, I, V: Version, F: FnMut(&mut T) -> bool> DoubleEndedIterator for DrainFi
             unsafe {
                 if (self.filter)(self.arena.values.get_unchecked_mut(index)) {
                     let key = self.arena.keys.get_unchecked(index).as_ptr().read();
-                    if !self.arena.slots.delete(key) {
-                        core::hint::unreachable_unchecked()
-                    }
+                    self.arena.slots.delete_unchecked(key);
                     return Some(self.arena.remove_unchecked(index))
                 }
             }

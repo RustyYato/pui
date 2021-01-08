@@ -156,7 +156,7 @@ impl<'a, T, I, V: Version> VacantEntry<'a, T, I, V> {
             };
             slot.version = self.updated_gen;
             self.arena.num_elements += 1;
-            self.arena.remove_slot_from_freelist(self.index, self.free);
+            remove_slot_from_freelist(&mut self.arena.slots, self.index, self.free);
 
             K::new_unchecked(self.index, self.updated_gen.save(), self.arena.slots.ident())
         }
@@ -164,30 +164,21 @@ impl<'a, T, I, V: Version> VacantEntry<'a, T, I, V> {
 }
 
 impl<T, I, V: Version> Arena<T, I, V> {
-    unsafe fn freelist(&mut self, idx: usize) -> &mut FreeNode { &mut self.slots.get_unchecked_mut(idx).data.free }
-
-    unsafe fn mu_freelist(&mut self, idx: usize) -> &mut MaybeUninitFreeNode {
-        &mut self.slots.get_unchecked_mut(idx).data.mu_free
-    }
-
     pub(super) unsafe fn remove_unchecked(&mut self, index: usize) -> T {
         self.num_elements -= 1;
-        let slot = self.slots.get_unchecked_mut(index);
-        let value = ManuallyDrop::take(&mut slot.data.value);
-        self.insert_slot_into_freelist(index);
-        value
+        remove_unchecked(&mut self.slots, index)
     }
 
     pub(super) unsafe fn delete_unchecked(&mut self, index: usize) {
-        struct Fixup<'a, T, I, V: Version>(&'a mut Arena<T, I, V>, usize);
+        struct Fixup<'a, T, V: Version>(&'a mut [Slot<T, V>], usize);
 
-        impl<T, I, V: Version> Drop for Fixup<'_, T, I, V> {
-            fn drop(&mut self) { unsafe { self.0.insert_slot_into_freelist(self.1) } }
+        impl<T, V: Version> Drop for Fixup<'_, T, V> {
+            fn drop(&mut self) { unsafe { insert_slot_into_freelist(self.0, self.1) } }
         }
 
         self.num_elements -= 1;
-        let fixup = Fixup(self, index);
-        let slot = fixup.0.slots.get_unchecked_mut(index);
+        let fixup = Fixup(&mut self.slots, index);
+        let slot = fixup.0.get_unchecked_mut(index);
         ManuallyDrop::drop(&mut slot.data.value);
     }
 
@@ -206,11 +197,11 @@ impl<T, I, V: Version> Arena<T, I, V> {
                 },
             });
 
-            arena.freelist(0).next = index;
+            freelist(&mut arena.slots, 0).next = index;
         }
 
         unsafe {
-            let head = self.freelist(0);
+            let head = freelist(&mut self.slots, 0);
             let end = head.other_end;
             let head = head.next;
             let next = [end, head][usize::from(end == 0)];
@@ -246,106 +237,121 @@ impl<T, I, V: Version> Arena<T, I, V> {
             }
         }
     }
+}
 
-    #[inline(always)]
-    unsafe fn remove_slot_from_freelist(&mut self, index: usize, free: MaybeUninitFreeNode) {
-        use core::cmp::Ordering;
+unsafe fn freelist<T, V: Version>(slots: &mut [Slot<T, V>], index: usize) -> &mut FreeNode {
+    &mut slots.get_unchecked_mut(index).data.free
+}
 
-        if index == 0 {
-            core::hint::unreachable_unchecked()
-        }
+unsafe fn mu_freelist<T, V: Version>(slots: &mut [Slot<T, V>], index: usize) -> &mut MaybeUninitFreeNode {
+    &mut slots.get_unchecked_mut(index).data.mu_free
+}
 
-        match free.other_end.assume_init().cmp(&index) {
-            Ordering::Equal => {
-                // if this is the last element in the block
-                self.mu_freelist(free.next.assume_init()).prev = free.prev;
-                self.mu_freelist(free.prev.assume_init()).next = free.next;
-                return
-            }
-            // if there are more items in the block, and this is the *end* of the block
-            // pop this node from the freelist
-            Ordering::Less => {
-                let other_end = free.other_end.assume_init();
-                self.mu_freelist(other_end).other_end = MaybeUninit::new(index.wrapping_sub(1));
-                self.mu_freelist(index.wrapping_sub(1)).other_end = MaybeUninit::new(other_end)
-            }
-            // if there are more items in the block, and this is the *start* of the block
-            // pop this node from the freelist and rebind the prev and next to point to
-            // this node
-            Ordering::Greater => {
-                let index = index.wrapping_add(1);
+pub(super) unsafe fn remove_unchecked<T, V: Version>(slots: &mut [Slot<T, V>], index: usize) -> T {
+    let slot = slots.get_unchecked_mut(index);
+    let value = ManuallyDrop::take(&mut slot.data.value);
+    insert_slot_into_freelist(slots, index);
+    value
+}
 
-                *self.mu_freelist(index) = free.into();
-                let index = MaybeUninit::new(index);
-                self.mu_freelist(free.other_end.assume_init()).other_end = index;
-                self.mu_freelist(free.next.assume_init()).prev = index;
-                self.mu_freelist(free.prev.assume_init()).next = index;
-            }
-        };
+#[inline(always)]
+unsafe fn remove_slot_from_freelist<T, V: Version>(slots: &mut [Slot<T, V>], index: usize, free: MaybeUninitFreeNode) {
+    use core::cmp::Ordering;
+
+    if index == 0 {
+        core::hint::unreachable_unchecked()
     }
 
-    unsafe fn insert_slot_into_freelist(&mut self, index: usize) {
-        let slot = self.slots.get_unchecked_mut(index);
-        match slot.version.mark_empty() {
-            Some(next_version) => slot.version = next_version,
-            None => {
-                // this slot has exhausted it's version counter, so
-                // omit it from the freelist and it will never be used again
-
-                // this is works with iteration because iteration always checks
-                // if the current slot is vacant, and then accesses `free.other_end`
-                slot.data.mu_free.other_end = MaybeUninit::new(index);
-                return
-            }
+    match free.other_end.assume_init().cmp(&index) {
+        Ordering::Equal => {
+            // if this is the last element in the block
+            mu_freelist(slots, free.next.assume_init()).prev = free.prev;
+            mu_freelist(slots, free.prev.assume_init()).next = free.next;
+            return
         }
+        // if there are more items in the block, and this is the *end* of the block
+        // pop this node from the freelist
+        Ordering::Less => {
+            let other_end = free.other_end.assume_init();
+            mu_freelist(slots, other_end).other_end = MaybeUninit::new(index.wrapping_sub(1));
+            mu_freelist(slots, index.wrapping_sub(1)).other_end = MaybeUninit::new(other_end)
+        }
+        // if there are more items in the block, and this is the *start* of the block
+        // pop this node from the freelist and rebind the prev and next to point to
+        // this node
+        Ordering::Greater => {
+            let index = index.wrapping_add(1);
 
-        let is_left_vacant = self.slots.get_unchecked(index.wrapping_sub(1)).is_vacant();
-        let is_right_vacant = self.slots.get(index.wrapping_add(1)).map_or(false, Slot::is_vacant);
+            *mu_freelist(slots, index) = free.into();
+            let index = MaybeUninit::new(index);
+            mu_freelist(slots, free.other_end.assume_init()).other_end = index;
+            mu_freelist(slots, free.next.assume_init()).prev = index;
+            mu_freelist(slots, free.prev.assume_init()).next = index;
+        }
+    };
+}
 
-        match (is_left_vacant, is_right_vacant) {
-            (false, false) => {
-                // new block
+unsafe fn insert_slot_into_freelist<T, V: Version>(slots: &mut [Slot<T, V>], index: usize) {
+    let slot = slots.get_unchecked_mut(index);
+    match slot.version.mark_empty() {
+        Some(next_version) => slot.version = next_version,
+        None => {
+            // this slot has exhausted it's version counter, so
+            // omit it from the freelist and it will never be used again
 
-                let head = self.freelist(0);
-                let old_head = head.next;
-                head.next = index;
-                *self.mu_freelist(index) = FreeNode {
-                    prev: 0,
-                    next: old_head,
-                    other_end: index,
-                }
-                .into();
+            // this is works with iteration because iteration always checks
+            // if the current slot is vacant, and then accesses `free.other_end`
+            slot.data.mu_free.other_end = MaybeUninit::new(index);
+            return
+        }
+    }
+
+    let is_left_vacant = slots.get_unchecked(index.wrapping_sub(1)).is_vacant();
+    let is_right_vacant = slots.get(index.wrapping_add(1)).map_or(false, Slot::is_vacant);
+
+    match (is_left_vacant, is_right_vacant) {
+        (false, false) => {
+            // new block
+
+            let head = freelist(slots, 0);
+            let old_head = head.next;
+            head.next = index;
+            *mu_freelist(slots, index) = FreeNode {
+                prev: 0,
+                next: old_head,
+                other_end: index,
             }
-            (false, true) => {
-                // prepend
+            .into();
+        }
+        (false, true) => {
+            // prepend
 
-                let front = *self.freelist(index + 1);
-                *self.mu_freelist(index) = front.into();
-                let index = MaybeUninit::new(index);
-                self.mu_freelist(front.other_end).other_end = index;
-                self.mu_freelist(front.next).prev = index;
-                self.mu_freelist(front.prev).next = index;
-            }
-            (true, false) => {
-                // append
+            let front = *freelist(slots, index + 1);
+            *mu_freelist(slots, index) = front.into();
+            let index = MaybeUninit::new(index);
+            mu_freelist(slots, front.other_end).other_end = index;
+            mu_freelist(slots, front.next).prev = index;
+            mu_freelist(slots, front.prev).next = index;
+        }
+        (true, false) => {
+            // append
 
-                let front = self.mu_freelist(index - 1).other_end.assume_init();
-                self.mu_freelist(index).other_end = MaybeUninit::new(front);
-                self.mu_freelist(front).other_end = MaybeUninit::new(index);
-            }
-            (true, true) => {
-                // join
+            let front = mu_freelist(slots, index - 1).other_end.assume_init();
+            mu_freelist(slots, index).other_end = MaybeUninit::new(front);
+            mu_freelist(slots, front).other_end = MaybeUninit::new(index);
+        }
+        (true, true) => {
+            // join
 
-                let next = *self.freelist(index + 1);
-                self.mu_freelist(next.prev).next = MaybeUninit::new(next.next);
-                self.mu_freelist(next.next).prev = MaybeUninit::new(next.prev);
+            let next = *freelist(slots, index + 1);
+            mu_freelist(slots, next.prev).next = MaybeUninit::new(next.next);
+            mu_freelist(slots, next.next).prev = MaybeUninit::new(next.prev);
 
-                let front = self.mu_freelist(index - 1).other_end.assume_init();
-                let back = next.other_end;
+            let front = mu_freelist(slots, index - 1).other_end.assume_init();
+            let back = next.other_end;
 
-                self.mu_freelist(front).other_end = MaybeUninit::new(back);
-                self.mu_freelist(back).other_end = MaybeUninit::new(front);
-            }
+            mu_freelist(slots, front).other_end = MaybeUninit::new(back);
+            mu_freelist(slots, back).other_end = MaybeUninit::new(front);
         }
     }
 }

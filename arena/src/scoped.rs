@@ -104,8 +104,8 @@ macro_rules! imp_scoped {
             pub type IterMut<'a, T, V = crate::version::DefaultVersion> = imp::IterMut<'a, T, V>;
             pub type IntoIter<T, V = crate::version::DefaultVersion> = imp::IntoIter<T, V>;
 
-            pub type Drain<'a, 'scope, T, V = crate::version::DefaultVersion> = imp::Drain<'a, T, pui_core::scoped::Scoped<'scope>, V>;
-            pub type DrainFilter<'a, 'scope, T, F, V = crate::version::DefaultVersion> = imp::DrainFilter<'a, T, pui_core::scoped::Scoped<'scope>, V, F>;
+            pub type Drain<'a, 'scope, T, V = crate::version::DefaultVersion> = imp::Drain<'a, T, V>;
+            pub type DrainFilter<'a, 'scope, T, F, V = crate::version::DefaultVersion> = imp::DrainFilter<'a, T, V, F>;
 
             pub type Keys<'a, 'scope, T, V = crate::version::DefaultVersion> = imp::Keys<'a, T, pui_core::scoped::Scoped<'scope>, V, Key<'scope, V>>;
 

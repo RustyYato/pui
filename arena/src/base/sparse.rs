@@ -303,14 +303,16 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> {
         if self.contains(&key) {
             let index = key.index();
-            Some(unsafe {
-                self.slots
-                    .get_unchecked_mut(index)
-                    .remove_unchecked(index, &mut self.next)
-            })
+            Some(unsafe { self.remove_unchecked(index) })
         } else {
             None
         }
+    }
+
+    pub unsafe fn remove_unchecked(&mut self, index: usize) -> T {
+        self.slots
+            .get_unchecked_mut(index)
+            .remove_unchecked(index, &mut self.next)
     }
 
     pub fn delete<K: ArenaAccess<I, V>>(&mut self, key: K) -> bool {
@@ -325,6 +327,12 @@ impl<T, I, V: Version> Arena<T, I, V> {
         } else {
             false
         }
+    }
+
+    pub(crate) unsafe fn delete_unchecked(&mut self, index: usize) {
+        self.slots
+            .get_unchecked_mut(index)
+            .delete_unchecked(index, &mut self.next)
     }
 
     pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> {
