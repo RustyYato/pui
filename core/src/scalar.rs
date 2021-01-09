@@ -120,7 +120,7 @@ impl Scalar for () {
     #[doc(hidden)]
     #[inline]
     fn inc_local(local: &Self::Local) -> Option<Self> {
-        match local.replace(false) {
+        match local.replace(true) {
             false => Some(()),
             true => None,
         }
@@ -129,7 +129,7 @@ impl Scalar for () {
     #[doc(hidden)]
     #[inline]
     fn inc_atomic(local: &Self::Atomic) -> Option<Self> {
-        match local.swap(false, Relaxed) {
+        match local.swap(true, Relaxed) {
             false => Some(()),
             true => None,
         }
