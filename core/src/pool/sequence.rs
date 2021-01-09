@@ -6,8 +6,27 @@ use crate::scalar::{OpaqueScalar, ScalarAllocator};
 
 use super::{Pool, PoolMut};
 
+/// A [`Pool`] that iterates over it's elements and tries to put a given
+/// [`OpaqueScalar`] into one of it's sub-pools. May fail if it can't put
+/// an element into any of it's pools
+///
+/// i.e.
+///
+/// ```
+/// # use std::cell::Cell; use pui_core::{pool::Sequence, scalar::OpaqueScalar, dynamic::Global as ThreadLocal};
+/// let sequence = Sequence {
+///     index: Cell::new(0),
+///     pools: [Cell::new(None), Cell::new(None), Cell::new(None), Cell::new(None)],
+/// };
+/// let sequence: &Sequence<Cell<usize>, [Cell<Option<OpaqueScalar<_>>>]> = &sequence;
+/// let dynamic = ThreadLocal::with_pool(sequence);
+/// ```
 pub struct Sequence<R, P: ?Sized> {
+    /// The index must be either `Cell<usize>` or `AtomicUsize`
     pub index: R,
+    /// The pools must have the type `[P]` where `P` is a pool
+    ///
+    /// This type is generic, so that it's possible to create it with safe code
     pub pools: P,
 }
 

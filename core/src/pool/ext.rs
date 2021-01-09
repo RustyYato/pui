@@ -4,7 +4,10 @@ use core::{
 };
 
 use super::{Pool, PoolMut};
-use crate::{Init, scalar::{OpaqueScalar, ScalarAllocator}};
+use crate::{
+    scalar::{OpaqueScalar, ScalarAllocator},
+    Init,
+};
 
 struct Take<'a, T>(&'a Cell<T>, ManuallyDrop<T>);
 
@@ -159,18 +162,34 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "parking_lot")] {
-        impl<A: ScalarAllocator> Init for super::SyncPool<A> {
-            const INIT: Self = super::SyncPool(Init::INIT);
+    if #[cfg(any(feature = "parking_lot", feature = "std"))] {
+        impl<A: ScalarAllocator> Init for super::SyncStackPool<A> {
+            const INIT: Self = super::SyncStackPool(Init::INIT);
         }
 
-        impl<A: ScalarAllocator> PoolMut<A> for super::SyncPool<A> {
+        impl<A: ScalarAllocator> PoolMut<A> for super::SyncStackPool<A> {
             fn insert_mut(&mut self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.0.insert_mut(scalar) }
 
             fn remove_mut(&mut self) -> Option<OpaqueScalar<A>> { self.0.remove_mut() }
         }
 
-        impl<A: ScalarAllocator> Pool<A> for super::SyncPool<A> {
+        impl<A: ScalarAllocator> Pool<A> for super::SyncStackPool<A> {
+            fn insert(&self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.0.insert(scalar) }
+
+            fn remove(&self) -> Option<OpaqueScalar<A>> { self.0.remove() }
+        }
+
+        impl<A: ScalarAllocator> Init for super::SyncQueuePool<A> {
+            const INIT: Self = super::SyncQueuePool(Init::INIT);
+        }
+
+        impl<A: ScalarAllocator> PoolMut<A> for super::SyncQueuePool<A> {
+            fn insert_mut(&mut self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.0.insert_mut(scalar) }
+
+            fn remove_mut(&mut self) -> Option<OpaqueScalar<A>> { self.0.remove_mut() }
+        }
+
+        impl<A: ScalarAllocator> Pool<A> for super::SyncQueuePool<A> {
             fn insert(&self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.0.insert(scalar) }
 
             fn remove(&self) -> Option<OpaqueScalar<A>> { self.0.remove() }

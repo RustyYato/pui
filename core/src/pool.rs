@@ -1,3 +1,5 @@
+//! A pool of ids that can be used to reuse ids in [`Dynamic`](crate::dynamic::Dynamic).
+
 use crate::scalar::{OpaqueScalar, ScalarAllocator};
 
 mod ext;
@@ -94,6 +96,21 @@ macro_rules! __global_pool {
     };
 }
 
+/// Create a new type that implements [`Pool`](crate::pool::Pool) and [`PoolMut`](crate::pool::PoolMut)
+/// that can be used with [`Dynamic`](crate::dynamic::Dynamic)
+///
+/// For example,
+///
+/// ```
+/// # #[cfg(feature = "std")]
+/// pui_core::global_pool! {
+///     pub struct MyPool(pui_core::pool::SyncStackPool<pui_core::dynamic::Global>);
+/// }
+///
+/// let _my_pool = MyPool;
+/// ```
+///
+/// will generate a global pool that is backed by a `SyncStackPool`, and holds `Global`s
 #[macro_export]
 macro_rules! global_pool {
     (
@@ -121,23 +138,40 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "parking_lot")] {
         use parking_lot::Mutex;
         use std::vec::Vec;
+        use std::collections::VecDeque;
 
-        pub struct SyncPool<T: ScalarAllocator>(Mutex<Vec<crate::scalar::OpaqueScalar<T>>>);
+        /// A thread safe stack-pool, it returns scalars in LIFO order
+        pub struct SyncStackPool<T: ScalarAllocator>(Mutex<Vec<crate::scalar::OpaqueScalar<T>>>);
+
+        /// A thread safe queue-pool, it returns scalars in FIFO order
+        pub struct SyncQueuePool<T: ScalarAllocator>(once_cell::sync::Lazy<Mutex<VecDeque<crate::scalar::OpaqueScalar<T>>>>);
     } else if #[cfg(feature = "std")] {
         use std::sync::Mutex;
-        pub struct SyncPool<T: ScalarAllocator>(once_cell::sync::Lazy<Mutex<Vec<crate::scalar::OpaqueScalar<T>>>>);
+        use std::collections::VecDeque;
+
+        /// A thread safe stack-pool, it returns scalars in LIFO order
+        pub struct SyncStackPool<T: ScalarAllocator>(once_cell::sync::Lazy<Mutex<Vec<crate::scalar::OpaqueScalar<T>>>>);
+
+        /// A thread safe queue-pool, it returns scalars in FIFO order
+        pub struct SyncQueuePool<T: ScalarAllocator>(once_cell::sync::Lazy<Mutex<VecDeque<crate::scalar::OpaqueScalar<T>>>>);
     }
 }
 
+/// A pool of ids that can be used to reuse ids in [`Dynamic`](crate::dynamic::Dynamic).
 pub trait PoolMut<A: ScalarAllocator> {
+    /// Put a new id into the pool
     fn insert_mut(&mut self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>>;
 
+    /// Take an id out of the pool
     fn remove_mut(&mut self) -> Option<OpaqueScalar<A>>;
 }
 
+/// A pool of ids that can be used to reuse ids in [`Dynamic`](crate::dynamic::Dynamic).
 pub trait Pool<A: ScalarAllocator>: PoolMut<A> {
+    /// Put a new id into the pool
     fn insert(&self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>>;
 
+    /// Take an id out of the pool
     fn remove(&self) -> Option<OpaqueScalar<A>>;
 }
 

@@ -10,6 +10,7 @@ use crate::{
     Init,
 };
 
+/// A [`Pool`] that can hold one scalar element of type `()`
 pub struct Flag<A> {
     flag: AtomicBool,
     alloc: PhantomData<A>,
@@ -20,6 +21,7 @@ impl<A> Init for Flag<A> {
 }
 
 impl<A> Flag<A> {
+    /// Create a new `Flag`
     pub const fn new() -> Self {
         Self {
             flag: AtomicBool::new(false),

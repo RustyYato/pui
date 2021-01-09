@@ -1,7 +1,11 @@
+//! A dynamically created type that is guarnteed to be
+//! unique on the given thread or process
+
 use core::{
     cmp::Ordering,
     hash::{Hash, Hasher},
     marker::PhantomData,
+    num::NonZeroU64,
 };
 
 use crate::{
@@ -11,14 +15,24 @@ use crate::{
 };
 
 crate::scalar_allocator! {
-    pub struct Global(core::num::NonZeroU64);
+    /// A global scalar allocator that's backed by a [`NonZeroU64`].
+    /// This allows `Option<DynamicToken<Global>>` to be the same size
+    /// as [`DynamicToken<Global>`](DynamicToken)
+    pub struct Global(NonZeroU64);
 }
 
 #[cfg(feature = "std")]
 crate::scalar_allocator! {
-    pub thread_local struct ThreadLocal(core::num::NonZeroU64);
+    /// A thread-local scalar allocator that's backed by a [`NonZeroU64`]
+    /// This allows `Option<DynamicToken<ThreadLocal>>` to be the same size
+    /// as [`DynamicToken<ThreadLocal>`](DynamicToken)
+    pub thread_local struct ThreadLocal(NonZeroU64);
 }
 
+/// A dynamically created type that is guarnteed to be unique on the given thread
+/// and if `A::AutoTraits: Send + Sync` on the given process.
+///
+/// `Dynamic` implements [`OneShotIdentifier`] if `P == ()`, i.e. there is no pool
 #[derive(Debug)]
 pub struct Dynamic<A: ScalarAllocator = Global, P: PoolMut<A> = ()> {
     scalar: A::Scalar,
@@ -26,6 +40,7 @@ pub struct Dynamic<A: ScalarAllocator = Global, P: PoolMut<A> = ()> {
     auto: PhantomData<A::AutoTraits>,
 }
 
+/// A token that is recognized by [`Dynamic`]
 #[derive(Debug)]
 #[repr(transparent)]
 pub struct DynamicToken<A: ScalarAllocator = Global> {
@@ -39,6 +54,7 @@ impl<A: ScalarAllocator<Scalar = ()>> Default for DynamicToken<A> {
 }
 
 impl<A: ScalarAllocator<Scalar = ()>> DynamicToken<A> {
+    /// Create a new token
     pub const NEW: Self = Self {
         scalar: (),
         auto: PhantomData,
@@ -47,6 +63,7 @@ impl<A: ScalarAllocator<Scalar = ()>> DynamicToken<A> {
 
 impl<A: ScalarAllocator> DynamicToken<A> {
     #[inline]
+    /// Create a new token
     pub fn new(scalar: A::Scalar) -> Self {
         Self {
             scalar,
@@ -56,22 +73,26 @@ impl<A: ScalarAllocator> DynamicToken<A> {
 }
 
 impl Dynamic {
+    /// Create a new `Dynamic` using the `Global` `ScalarAllocator`
     #[inline]
     pub fn create() -> Self { Self::with_pool(()) }
 }
 
 impl<P: PoolMut<Global>> Dynamic<Global, P> {
     #[inline]
+    /// Create a new `Dynamic` using the `Global` `ScalarAllocator` and the given pool
     pub fn with_pool(pool: P) -> Self { Self::with_alloc_and_pool(pool) }
 }
 
 impl<A: ScalarAllocator> Dynamic<A> {
     #[inline]
+    /// Create a new `Dynamic` using the given `ScalarAllocator`
     pub fn with_alloc() -> Self { Self::with_alloc_and_pool(()) }
 }
 
 impl<A: ScalarAllocator, P: PoolMut<A>> Dynamic<A, P> {
     #[inline]
+    /// Create a new `Dynamic` using the given `ScalarAllocator` and pool
     pub fn with_alloc_and_pool(mut pool: P) -> Self {
         Self {
             scalar: pool.remove_mut().map(OpaqueScalar::into_inner).unwrap_or_else(A::alloc),
