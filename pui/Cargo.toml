@@ -1,6 +1,6 @@
 [package]
 name = "pui"
-version = "0.1.0"
+version = "0.5.0"
 authors = ["RustyYato <krishna.sd.2012@gmail.com>"]
 edition = "2018"
 
@@ -13,5 +13,5 @@ std = []
 [dependencies]
 pui-core = { path = '../core' }
 pui-vec = { path = '../vec', features = ['pui'] }
-pui-arena = { path = '../arena', features = ['pui', 'slot_map', 'slab', 'scoped'] }
+pui-arena = { path = '../arena', features = ['pui', 'slotmap', 'slab', 'scoped'] }
 pui-cell = { path = '../cell' }

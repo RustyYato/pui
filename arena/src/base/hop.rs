@@ -1,3 +1,5 @@
+//! a hop arena
+
 use core::{
     marker::PhantomData,
     ops::{Index, IndexMut},
@@ -14,35 +16,44 @@ pub use imp::VacantEntry;
 mod iter_unchecked;
 use iter_unchecked::IteratorUnchecked;
 
+/// A key into a hop arena
 #[derive(Clone, Copy)]
 pub struct Key<Id, V = crate::version::SavedDefaultVersion> {
     id: Id,
     version: V,
 }
 
+/// A hop arena
 #[derive(Debug, Clone)]
 pub struct Arena<T, I = (), V: Version = crate::version::DefaultVersion> {
     slots: PuiVec<Slot<T, V>, I>,
     num_elements: usize,
 }
 
+/// A trait to access elements of a hop [`Arena`]
 pub unsafe trait ArenaAccess<I, V: Version> {
+    #[doc(hidden)]
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool;
 
+    /// The index of this key
     fn index(&self) -> usize;
 }
 
+/// A trait to create keys from an arena
 pub trait BuildArenaKey<I, V: Version>: ArenaAccess<I, V> {
+    #[doc(hidden)]
     unsafe fn new_unchecked(index: usize, version: V::Save, ident: &I) -> Self;
 }
 
 unsafe impl<K: ?Sized + ArenaAccess<I, V>, I, V: Version> ArenaAccess<I, V> for &K {
+    #[doc(hidden)]
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool { K::contained_in(self, arena) }
 
     fn index(&self) -> usize { K::index(self) }
 }
 
 unsafe impl<I, V: Version> ArenaAccess<I, V> for usize {
+    #[doc(hidden)]
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
         arena.slots.get(*self).map_or(false, Slot::is_occupied)
     }
@@ -51,10 +62,12 @@ unsafe impl<I, V: Version> ArenaAccess<I, V> for usize {
 }
 
 impl<I, V: Version> BuildArenaKey<I, V> for usize {
+    #[doc(hidden)]
     unsafe fn new_unchecked(index: usize, _: V::Save, _: &I) -> Self { index }
 }
 
 unsafe impl<I, V: Version> ArenaAccess<I, V> for crate::TrustedIndex {
+    #[doc(hidden)]
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
         unsafe { arena.slots.get_unchecked(self.0).is_occupied() }
     }
@@ -64,6 +77,7 @@ unsafe impl<I, V: Version> ArenaAccess<I, V> for crate::TrustedIndex {
 
 #[cfg(feature = "pui-core")]
 unsafe impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for pui_vec::Id<I::Token> {
+    #[doc(hidden)]
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool { arena.slots.get(self).map_or(false, Slot::is_occupied) }
 
     fn index(&self) -> usize { self.get() }
@@ -71,12 +85,14 @@ unsafe impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for pu
 
 #[cfg(feature = "pui-core")]
 impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for pui_vec::Id<I::Token> {
+    #[doc(hidden)]
     unsafe fn new_unchecked(index: usize, _: V::Save, ident: &I) -> Self {
         pui_vec::Id::new_unchecked(index, ident.token())
     }
 }
 
 unsafe impl<I, V: Version> ArenaAccess<I, V> for Key<usize, V::Save> {
+    #[doc(hidden)]
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
         let saved = self.version;
         arena
@@ -89,10 +105,12 @@ unsafe impl<I, V: Version> ArenaAccess<I, V> for Key<usize, V::Save> {
 }
 
 impl<I, V: Version> BuildArenaKey<I, V> for Key<usize, V::Save> {
+    #[doc(hidden)]
     unsafe fn new_unchecked(index: usize, version: V::Save, _: &I) -> Self { Key { id: index, version } }
 }
 
 unsafe impl<I, V: Version> ArenaAccess<I, V> for Key<crate::TrustedIndex, V::Save> {
+    #[doc(hidden)]
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
         unsafe {
             let saved = self.version;
@@ -105,6 +123,7 @@ unsafe impl<I, V: Version> ArenaAccess<I, V> for Key<crate::TrustedIndex, V::Sav
 
 #[cfg(feature = "pui-core")]
 unsafe impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for Key<pui_vec::Id<I::Token>, V::Save> {
+    #[doc(hidden)]
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
         let saved = self.version;
         arena
@@ -118,6 +137,7 @@ unsafe impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for Ke
 
 #[cfg(feature = "pui-core")]
 impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for Key<pui_vec::Id<I::Token>, V::Save> {
+    #[doc(hidden)]
     unsafe fn new_unchecked(index: usize, version: V::Save, ident: &I) -> Self {
         Key {
             id: pui_vec::Id::new_unchecked(index, ident.token()),
@@ -127,10 +147,13 @@ impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for Key<pui
 }
 
 impl<Id, V> Key<Id, V> {
-    pub fn new(id: Id, version: V) -> Self { Self { id, version } }
+    /// Create a new key from an id and version
+    pub const fn new(id: Id, version: V) -> Self { Self { id, version } }
 
+    /// The id the given key
     pub const fn id(&self) -> &Id { &self.id }
 
+    /// The version of the given key
     pub const fn version(&self) -> &V { &self.version }
 }
 
@@ -139,10 +162,12 @@ impl<T> Default for Arena<T> {
 }
 
 impl<T> Arena<T> {
+    /// Create a new arena
     pub fn new() -> Self { Self::with_ident(()) }
 }
 
 impl<T, V: Version> Arena<T, (), V> {
+    /// Clear the arena without reducing it's capacity
     pub fn clear(&mut self) {
         self.slots.vec_mut().clear();
         let _: usize = self.slots.push(Slot::SENTINEL);
@@ -150,6 +175,7 @@ impl<T, V: Version> Arena<T, (), V> {
 }
 
 impl<T, I, V: Version> Arena<T, I, V> {
+    /// Create a new arena with the given identifier
     pub fn with_ident(ident: I) -> Self {
         Self {
             num_elements: 0,
@@ -157,34 +183,67 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    /// Get the associated identifier for this arena
     pub fn ident(&self) -> &I { self.slots.ident() }
 
+    /// Returns true if the arena is empty
     pub fn is_empty(&self) -> bool { self.num_elements == 0 }
 
+    /// Returns the number of elements in this arena
     pub fn len(&self) -> usize { self.num_elements }
 
+    /// Returns the capacity of this arena
     pub fn capacity(&self) -> usize { self.slots.capacity() }
 
+    /// Reserves capacity for at least additional more elements to be inserted
+    /// in the given Arena<T>. The collection may reserve more space to avoid
+    /// frequent reallocations. After calling reserve, capacity will be greater
+    /// than or equal to self.len() + additional. Does nothing if capacity is
+    /// already sufficient.
     pub fn reserve(&mut self, additional: usize) { self.slots.reserve(additional) }
 
+    /// Check if an index is in bounds, and if it is return a `Key<_, _>` to it
     #[inline]
     pub fn parse_key<K: BuildArenaKey<I, V>>(&self, index: usize) -> Option<K> {
         let slot = self.slots.get(index)?;
         slot.parse_key(index, self.slots.ident())
     }
 
+    /// Return a handle to a vacant entry allowing for further manipulation.
+    ///
+    /// This function is useful when creating values that must contain their
+    /// key. The returned VacantEntry reserves a slot in the arena and is able
+    /// to query the associated key.
     pub fn vacant_entry(&mut self) -> VacantEntry<'_, T, I, V> { self.__vacant_entry() }
 
+    /// Insert a value in the arena, returning key assigned to the value.
+    ///
+    /// The returned key can later be used to retrieve or remove the value
+    /// using indexed lookup and remove. Additional capacity is allocated
+    /// if needed.
     pub fn insert<K: BuildArenaKey<I, V>>(&mut self, value: T) -> K { self.vacant_entry().insert(value) }
 
+    /// Return true if a value is associated with the given key.
     pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { key.contained_in(self) }
 
+    /// Remove and return the value associated with the given key.
+    ///
+    /// The key is then released and may be associated with future stored values,
+    /// if the versioning strategy allows it.
+    ///
+    /// Panics if key is not associated with a value.
     #[track_caller]
     pub fn remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> T {
         self.try_remove(key)
             .expect("Could not remove from an `Arena` using a stale `Key`")
     }
 
+    /// Remove and return the value associated with the given key.
+    ///
+    /// The key is then released and may be associated with future stored values,
+    /// if the versioning strategy allows it.
+    ///
+    /// Returns `None` if key is not associated with a value.
     pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> {
         if self.contains(&key) {
             Some(unsafe { self.remove_unchecked(key.index()) })
@@ -193,6 +252,12 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    /// Removes the value associated with the given key.
+    ///
+    /// The key is then released and may be associated with future stored values,
+    /// if the versioning strategy allows it.
+    ///
+    /// Returns true if the value was removed, an false otherwise
     pub fn delete<K: ArenaAccess<I, V>>(&mut self, key: K) -> bool {
         if self.contains(&key) {
             unsafe { self.delete_unchecked(key.index()) }
@@ -202,6 +267,9 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    /// Return a shared reference to the value associated with the given key.
+    ///
+    /// If the given key is not associated with a value, then None is returned.
     pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> {
         if self.contains(&key) {
             unsafe { Some(self.get_unchecked(key.index())) }
@@ -210,6 +278,9 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    /// Return a unique reference to the value associated with the given key.
+    ///
+    /// If the given key is not associated with a value, then None is returned.
     pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> {
         if self.contains(&key) {
             unsafe { Some(self.get_unchecked_mut(key.index())) }
@@ -218,14 +289,33 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    /// Return a shared reference to the value associated with the
+    /// given key without performing bounds checking, or checks
+    /// if there is a value associated to the key
+    ///
+    /// # Safety
+    ///
+    /// `contains` should return true with the given index.
     pub unsafe fn get_unchecked(&self, index: usize) -> &T { self.slots.get_unchecked(index).get_unchecked() }
 
+    /// Return a unique reference to the value associated with the
+    /// given key without performing bounds checking, or checks
+    /// if there is a value associated to the key
+    ///
+    /// # Safety
+    ///
+    /// `contains` should return true with the given index.
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
         self.slots.get_unchecked_mut(index).get_mut_unchecked()
     }
 
+    /// Deletes all elements from the arena
     pub fn delete_all(&mut self) { self.retain(|_| false) }
 
+    /// Retain only the elements specified by the predicate.
+    ///
+    /// If the predicate returns for a given element true,
+    /// then the element is kept in the arena.
     pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
         let mut i = 0;
 
@@ -247,12 +337,15 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    /// An iterator over the keys of the arena, in no particular order
     pub fn keys<K: BuildArenaKey<I, V>>(&self) -> Keys<'_, T, I, V, K> {
         Keys {
             entries: self.entries(),
         }
     }
 
+    /// An iterator of shared references to values of the arena,
+    /// in no particular order
     pub fn iter(&self) -> Iter<'_, T, V> {
         Iter {
             slots: Occupied {
@@ -262,6 +355,8 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    /// An iterator of unique references to values of the arena,
+    /// in no particular order
     pub fn iter_mut(&mut self) -> IterMut<'_, T, V> {
         IterMut {
             slots: OccupiedMut {
@@ -279,8 +374,21 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    /// Return a draining iterator that removes all elements from the
+    /// arena and yields the removed items.
+    ///
+    /// Note: Elements are removed even if the iterator is only partially
+    /// consumed or not consumed at all.
     pub fn drain(&mut self) -> Drain<'_, T, V> { Drain { cursor: self.cursor() } }
 
+    /// Return a draining iterator that removes all elements specified by the predicate
+    /// from the arena and yields the removed items.
+    ///
+    /// If the predicate returns true for a given element, then it is removed from
+    /// the arena, and yielded from the iterator.
+    ///
+    /// Note: Elements are removed even if the iterator is only partially
+    /// consumed or not consumed at all.
     pub fn drain_filter<F: FnMut(&mut T) -> bool>(&mut self, filter: F) -> DrainFilter<'_, T, V, F> {
         DrainFilter {
             cursor: self.cursor(),
@@ -289,6 +397,9 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    /// An iterator of keys and shared references to values of the arena,
+    /// in no particular order, with each key being associated
+    /// to the corrosponding value
     pub fn entries<K: BuildArenaKey<I, V>>(&self) -> Entries<'_, T, I, V, K> {
         Entries {
             slots: Occupied {
@@ -300,6 +411,9 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    /// An iterator of keys and unique references to values of the arena,
+    /// in no particular order, with each key being associated
+    /// to the corrosponding value
     pub fn entries_mut<K: BuildArenaKey<I, V>>(&mut self) -> EntriesMut<'_, T, I, V, K> {
         let (ident, slots) = self.slots.as_mut_parts();
         EntriesMut {
@@ -312,6 +426,9 @@ impl<T, I, V: Version> Arena<T, I, V> {
         }
     }
 
+    /// An iterator of keys and values of the arena,
+    /// in no particular order, with each key being associated
+    /// to the corrosponding value
     pub fn into_entries<K: BuildArenaKey<I, V>>(self) -> IntoEntries<T, I, V, K> {
         let (ident, slots) = unsafe { self.slots.into_raw_parts() };
         IntoEntries {
@@ -400,6 +517,7 @@ impl<I: IteratorUnchecked> DoubleEndedIterator for OccupiedBase<I> {
     }
 }
 
+/// Returned by [`Arena::keys`]
 pub struct Keys<'a, T, I, V: Version, K> {
     entries: Entries<'a, T, I, V, K>,
 }
@@ -430,6 +548,7 @@ unsafe fn entry<I, V: Version, T, K: BuildArenaKey<I, V>>(ident: &I) -> impl '_ 
     move |(index, (version, value))| (K::new_unchecked(index, version.save(), ident), value)
 }
 
+/// Returned by [`Arena::iter`]
 pub struct Iter<'a, T, V: Version> {
     slots: Occupied<'a, T, V>,
 }
@@ -452,6 +571,7 @@ impl<T, V: Version> DoubleEndedIterator for Iter<'_, T, V> {
 impl<T, V: Version> ExactSizeIterator for Iter<'_, T, V> {}
 impl<T, V: Version> core::iter::FusedIterator for Iter<'_, T, V> {}
 
+/// Returned by [`Arena::iter_mut`]
 pub struct IterMut<'a, T, V: Version> {
     slots: OccupiedMut<'a, T, V>,
 }
@@ -474,6 +594,7 @@ impl<T, V: Version> DoubleEndedIterator for IterMut<'_, T, V> {
 impl<T, V: Version> ExactSizeIterator for IterMut<'_, T, V> {}
 impl<T, V: Version> core::iter::FusedIterator for IterMut<'_, T, V> {}
 
+/// Returned by [`Arena::into_iter`]
 pub struct IntoIter<T, V: Version> {
     slots: IntoOccupied<T, V>,
 }
@@ -533,6 +654,7 @@ impl<T, V: Version> Cursor<'_, T, V> {
     }
 }
 
+/// Returned by [`Arena::drain`]
 pub struct Drain<'a, T, V: Version> {
     cursor: Cursor<'a, T, V>,
 }
@@ -557,6 +679,7 @@ impl<T, V: Version> DoubleEndedIterator for Drain<'_, T, V> {
     }
 }
 
+/// Returned by [`Arena::drain_filter`]
 pub struct DrainFilter<'a, T, V: Version, F: FnMut(&mut T) -> bool> {
     cursor: Cursor<'a, T, V>,
     filter: F,
@@ -601,6 +724,7 @@ impl<T, V: Version, F: FnMut(&mut T) -> bool> DoubleEndedIterator for DrainFilte
     }
 }
 
+/// Returned by [`Arena::entries`]
 pub struct Entries<'a, T, I, V: Version, K> {
     slots: Occupied<'a, T, V>,
     ident: &'a I,
@@ -625,6 +749,7 @@ impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for Entries<'
 impl<T, I, V: Version, K: BuildArenaKey<I, V>> ExactSizeIterator for Entries<'_, T, I, V, K> {}
 impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for Entries<'_, T, I, V, K> {}
 
+/// Returned by [`Arena::entries_mut`]
 pub struct EntriesMut<'a, T, I, V: Version, K> {
     slots: OccupiedMut<'a, T, V>,
     ident: &'a I,
@@ -649,6 +774,7 @@ impl<T, I, V: Version, K: BuildArenaKey<I, V>> DoubleEndedIterator for EntriesMu
 impl<T, I, V: Version, K: BuildArenaKey<I, V>> ExactSizeIterator for EntriesMut<'_, T, I, V, K> {}
 impl<T, I, V: Version, K: BuildArenaKey<I, V>> core::iter::FusedIterator for EntriesMut<'_, T, I, V, K> {}
 
+/// Returned by [`Arena::into_entries`]
 pub struct IntoEntries<T, I, V: Version, K> {
     slots: IntoOccupied<T, V>,
     ident: I,

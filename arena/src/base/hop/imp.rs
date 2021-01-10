@@ -43,6 +43,7 @@ pub(super) struct Slot<T, V: Version> {
     data: Data<T>,
 }
 
+/// An empty slot in a hop arena
 pub struct VacantEntry<'a, T, I, V: Version = DefaultVersion> {
     arena: &'a mut Arena<T, I, V>,
     index: usize,
@@ -144,10 +145,13 @@ impl<T, V: Version> Slot<T, V> {
 }
 
 impl<'a, T, I, V: Version> VacantEntry<'a, T, I, V> {
+    /// Get the key associated with the `VacantEntry`, this key can be used
+    /// once this `VacantEntry` gets filled
     pub fn key<K: BuildArenaKey<I, V>>(&self) -> K {
         unsafe { K::new_unchecked(self.index, self.updated_gen.save(), self.arena.slots.ident()) }
     }
 
+    /// Insert an element into the vacant entry
     pub fn insert<K: BuildArenaKey<I, V>>(self, value: T) -> K {
         unsafe {
             let slot = self.arena.slots.get_unchecked_mut(self.index);

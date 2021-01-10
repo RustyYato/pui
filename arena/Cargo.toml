@@ -9,7 +9,7 @@ edition = "2018"
 [features]
 
 pui = ['pui-vec/pui', 'pui-core']
-slot_map = []
+slotmap = []
 slab = []
 scoped = ['pui']
 

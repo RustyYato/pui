@@ -1,5 +1,7 @@
 #![no_std]
-#![forbid(missing_docs, clippy::missing_safety_doc)]
+#![forbid(missing_docs)]
+#![deny(clippy::missing_safety_doc)]
+// FIXME - the docs in this crate a *very* minimal, and need to be expanded upon
 
 //! A set of very efficient, and very customizable arenas that
 //! can elide bounds checks wherever possible.
@@ -10,32 +12,44 @@ pub extern crate alloc as std;
 
 pub mod version;
 
+/// the core implementations of different types of arenas
 pub mod base {
     pub mod dense;
     pub mod hop;
     pub mod sparse;
 }
 
+/// scoped arenas
 #[cfg(feature = "scoped")]
 pub mod scoped;
+/// a reimplementation of [`slab`](https://docs.rs/slab/) in terms
+/// of the generic arenas in [`base`]
 #[cfg(feature = "slab")]
 pub mod slab;
-#[cfg(feature = "slot_map")]
-pub mod slot_map;
+/// a reimplementation of [`slotmap`](https://docs.rs/slotmap/) in terms
+/// of the generic arenas in [`base`]
+#[cfg(feature = "slotmap")]
+pub mod slotmap;
 
 #[doc(hidden)]
 #[cfg(feature = "pui")]
 pub use {core, pui_core, pui_vec};
 
+/// An index that's guaranteed to be in bounds of the arena it's used on
 #[derive(Clone, Copy)]
 pub struct TrustedIndex(usize);
 
 impl TrustedIndex {
+    /// Create a new `TrustedIndex`
+    ///
+    /// # Safety
+    ///
+    /// This `index` must be in bounds on all arenas this `Self` is used on
     #[inline]
     pub unsafe fn new(index: usize) -> Self { Self(index) }
 }
 
-pub struct SetOnDrop<'a>(&'a mut bool);
+struct SetOnDrop<'a>(&'a mut bool);
 
 impl Drop for SetOnDrop<'_> {
     fn drop(&mut self) { *self.0 = true; }
@@ -45,6 +59,7 @@ impl SetOnDrop<'_> {
     fn defuse(self) { core::mem::forget(self) }
 }
 
+/// Create newtype of all the arenas in `base`
 #[macro_export]
 #[cfg(feature = "pui")]
 macro_rules! newtype {
