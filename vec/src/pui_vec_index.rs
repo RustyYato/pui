@@ -17,25 +17,54 @@ mod seal {
 #[inline(never)]
 fn index_fail() -> ! { panic!() }
 
+/// A type that represents an index/range into a `PuiVec`
 pub trait PuiVecIndex<I>: Seal {
+    /// The underlying index/range type
     type SliceIndex;
 
+    /// Is self contained in `PuiVec`
     fn contained_in<T>(&self, vec: &PuiVec<T, I>) -> bool;
 
+    #[doc(hidden)]
     fn slice_index(&self) -> Self::SliceIndex;
 }
 
+/// A type that can be build from an index and an identifier from a `PuiVec`
 pub trait BuildPuiVecIndex<I>: PuiVecIndex<I> {
+    /// Create a new `Self`
+    ///
+    /// # Safety
+    ///
+    /// * `slice_index` must be contained in the `PuiVec` with the identifier `ident`
     unsafe fn new_unchecked(slice_index: Self::SliceIndex, ident: &I) -> Self;
 }
 
+/// A type that can be used to access a `PuiVec`
 pub trait PuiVecAccess<T, I>: PuiVecIndex<I> {
+    /// The output type returned by methods.
     type Output: ?Sized;
 
+    /// Returns a shared reference to the output at this location,
+    /// without performing any bounds checking. Calling this method with an
+    /// out-of-boundsindex or a dangling slice pointer is ***undefined behavior***
+    /// even if the resulting reference is not used.
+    ///
+    /// # Safety
+    ///
+    /// `self.contained_in(vec)` must return true
     unsafe fn get_unchecked<'a>(&self, vec: &'a PuiVec<T, I>) -> &'a Self::Output;
 
+    /// Returns a uniquue reference to the output at this location,
+    /// without performing any bounds checking. Calling this method with an
+    /// out-of-boundsindex or a dangling slice pointer is ***undefined behavior***
+    /// even if the resulting reference is not used.
+    ///
+    /// # Safety
+    ///
+    /// `self.contained_in(vec)` must return true
     unsafe fn get_unchecked_mut<'a>(&self, vec: &'a mut PuiVec<T, I>) -> &'a mut Self::Output;
 
+    /// Returns a shared reference to the output at this location, if in bounds.
     fn get<'a>(&self, vec: &'a PuiVec<T, I>) -> Option<&'a Self::Output> {
         if self.contained_in(vec) {
             Some(unsafe { self.get_unchecked(vec) })
@@ -44,6 +73,7 @@ pub trait PuiVecAccess<T, I>: PuiVecIndex<I> {
         }
     }
 
+    /// Returns a unique reference to the output at this location, if in bounds.
     fn get_mut<'a>(&self, vec: &'a mut PuiVec<T, I>) -> Option<&'a mut Self::Output> {
         if self.contained_in(vec) {
             Some(unsafe { self.get_unchecked_mut(vec) })
@@ -52,6 +82,7 @@ pub trait PuiVecAccess<T, I>: PuiVecIndex<I> {
         }
     }
 
+    /// Returns a shared reference to the output at this location, panicking if out of bounds.
     fn index<'a>(&self, vec: &'a PuiVec<T, I>) -> &'a Self::Output {
         if self.contained_in(vec) {
             unsafe { self.get_unchecked(vec) }
@@ -60,6 +91,7 @@ pub trait PuiVecAccess<T, I>: PuiVecIndex<I> {
         }
     }
 
+    /// Returns a unique reference to the output at this location, panicking if out of bounds.
     fn index_mut<'a>(&self, vec: &'a mut PuiVec<T, I>) -> &'a mut Self::Output {
         if self.contained_in(vec) {
             unsafe { self.get_unchecked_mut(vec) }

@@ -436,7 +436,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     }
 
     pub fn into_entries<K: BuildArenaKey<I, V>>(self) -> IntoEntries<T, I, V, K> {
-        let (ident, slots) = self.slots.into_raw_parts();
+        let (ident, slots) = unsafe { self.slots.into_raw_parts() };
 
         IntoEntries {
             slots: Occupied {
@@ -455,7 +455,7 @@ impl<T, I, V: Version> IntoIterator for Arena<T, I, V> {
     fn into_iter(self) -> Self::IntoIter {
         IntoIter {
             slots: Occupied {
-                slots: self.slots.into_raw_parts().1.into_iter(),
+                slots: unsafe { self.slots.into_raw_parts().1.into_iter() },
             },
         }
     }
