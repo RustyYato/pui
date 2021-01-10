@@ -31,6 +31,12 @@ macro_rules! inc {
 /// Simple types that can be produced from [`ScalarAllocator`], these types
 /// are known to have stable [`Clone`] and [`Eq`] implementations that allow
 /// them to be used in the implementation of [`Token`](crate::Token)
+///
+/// This trait is used by the [`scalar_allocator`](crate::scalar_allocator)
+/// macro's implementation to verify safety, and provide pieces of implementation.
+///
+/// All contents of `Scalar` that are hidden from documentation, have
+/// ***NO STABILITY GUARANTEES WHATSOEVER***
 pub trait Scalar: crate::Seal + Copy + Ord + Hash {
     #[doc(hidden)]
     type Local;
@@ -75,7 +81,7 @@ impl<S: ScalarAllocator> OpaqueScalar<S> {
 ///    to each other
 pub unsafe trait ScalarAllocator {
     /// The types in the sequence
-    type Scalar: Scalar;
+    type Scalar: Clone + Eq;
     /// This type's autotraits restrictions that will
     /// be applied to both `Dynamic` and `DynamicToken`
     type AutoTraits;
@@ -93,15 +99,24 @@ impl<A: ScalarAllocator> PartialEq for OpaqueScalar<A> {
     fn eq(&self, other: &Self) -> bool { self.0 == other.0 }
 }
 
-impl<A: ScalarAllocator> Hash for OpaqueScalar<A> {
+impl<A: ScalarAllocator> Hash for OpaqueScalar<A>
+where
+    A::Scalar: Hash,
+{
     fn hash<H: Hasher>(&self, state: &mut H) { self.0.hash(state) }
 }
 
-impl<A: ScalarAllocator> PartialOrd for OpaqueScalar<A> {
+impl<A: ScalarAllocator> PartialOrd for OpaqueScalar<A>
+where
+    A::Scalar: PartialOrd,
+{
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { self.0.partial_cmp(&other.0) }
 }
 
-impl<A: ScalarAllocator> Ord for OpaqueScalar<A> {
+impl<A: ScalarAllocator> Ord for OpaqueScalar<A>
+where
+    A::Scalar: Ord,
+{
     fn cmp(&self, other: &Self) -> cmp::Ordering { self.0.cmp(&other.0) }
 }
 
@@ -229,9 +244,23 @@ macro_rules! __scalar_allocator {
 /// ```
 ///
 /// `Foo: ScalarAllocator`, and because it is guaratneed to
-/// produce one scalar, it also implements `Pool` with a `Flag`
+/// produce one scalar, it also implements [`Pool`](crate::pool::Pool)
+/// with a [`Flag`](crate::pool::Flag). `Bar: ScalarAllocator`, as you
+/// can see it also has a paramter: `u8`. You can use any type that
+/// implements [`Scalar`] in it's place. This type defines what sort
+/// the inner type of [`Dynamic`](crate::dynamic::Dynamic)
+/// and [`DynamicToken`](crate::dynamic::DynamicToken).
 ///
-/// You can also prefix `struct` with `thread_local` to get a `ScalarAllocator`
+/// For example you could use `u64`:
+///
+/// ```
+/// pui_core::scalar_allocator! {
+///     #[derive(Debug)]
+///     pub struct Bar(u64);
+/// }
+///```
+///
+/// You can also prefix `struct` with `thread_local` to get a [`ScalarAllocator`]
 /// that is only produces unique scalars on within a given thread
 ///
 /// For example:

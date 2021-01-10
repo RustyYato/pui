@@ -74,9 +74,9 @@ pub mod export;
 pub mod pool;
 pub mod scalar;
 
-pub mod anonomous;
 pub mod dynamic;
 pub mod scoped;
+pub mod ty;
 
 pub(crate) use seal::Seal;
 #[forbid(missing_docs)]

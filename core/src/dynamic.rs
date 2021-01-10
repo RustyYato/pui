@@ -1,5 +1,19 @@
 //! A dynamically created type that is guarnteed to be
 //! unique on the given thread or process
+//!
+//! [`Dynamic`] uses [`ScalarAllocator`] and [`PoolMut`]
+//! to ensure that it holds a unique value. This value
+//! is cloned into the [`DynamicToken`] and used to
+//! verify identity.
+//!
+//! [`Dynamic`] initially tries to pull a value from [`PoolMut`]
+//! if that fails, it then allocates a new value from the
+//! [`ScalarAllocator`]. Unless the backing `Scalar` is `()`,
+//! then this checks it's identity at runtime. Hence the name,
+//! `Dynamic`.
+//!
+//! If the provided pool is `()`, then no values will be reused,
+//! and this allows `Dynamic` to implement [`OneShotIdentifier`].
 
 use core::{
     cmp::Ordering,
@@ -104,17 +118,19 @@ impl<A: ScalarAllocator, P: PoolMut<A>> Dynamic<A, P> {
 
 impl<A: ScalarAllocator, P: PoolMut<A>> Drop for Dynamic<A, P> {
     #[inline]
-    fn drop(&mut self) { let _ = self.pool.insert_mut(unsafe { OpaqueScalar::new(self.scalar) }); }
+    fn drop(&mut self) { let _ = self.pool.insert_mut(unsafe { OpaqueScalar::new(self.scalar.clone()) }); }
 }
 
 impl<A: ScalarAllocator, P: PoolMut<A>> Dynamic<A, P> {
+    /// Checks if self created the given [`DynamicToken`]
     #[inline]
-    fn owns_token(&self, token: DynamicToken<A>) -> bool { self.scalar == token.scalar }
+    pub fn owns_token(&self, token: &DynamicToken<A>) -> bool { self.scalar == token.scalar }
 
+    /// Creates a [`DynamicToken`]
     #[inline]
-    fn token(&self) -> DynamicToken<A> {
+    pub fn token(&self) -> DynamicToken<A> {
         DynamicToken {
-            scalar: self.scalar,
+            scalar: self.scalar.clone(),
             auto: PhantomData,
         }
     }
@@ -127,7 +143,7 @@ unsafe impl<A: ScalarAllocator, P: PoolMut<A>> Identifier for Dynamic<A, P> {
     type Token = DynamicToken<A>;
 
     #[inline]
-    fn owns_token(&self, token: &Self::Token) -> bool { self.owns_token(*token) }
+    fn owns_token(&self, token: &Self::Token) -> bool { self.owns_token(token) }
 
     #[inline]
     fn token(&self) -> Self::Token { self.token() }
@@ -141,10 +157,15 @@ impl<A: ScalarAllocator<Scalar = ()>> crate::Init for DynamicToken<A> {
 }
 
 impl<A: ScalarAllocator<Scalar = ()>> crate::Trivial for DynamicToken<A> {}
-impl<A: ScalarAllocator> Copy for DynamicToken<A> {}
+impl<A: ScalarAllocator> Copy for DynamicToken<A> where A::Scalar: Copy {}
 impl<A: ScalarAllocator> Clone for DynamicToken<A> {
     #[inline]
-    fn clone(&self) -> Self { *self }
+    fn clone(&self) -> Self {
+        Self {
+            scalar: self.scalar.clone(),
+            auto: PhantomData,
+        }
+    }
 }
 
 impl<A: ScalarAllocator> Eq for DynamicToken<A> {}
@@ -153,17 +174,26 @@ impl<A: ScalarAllocator> PartialEq for DynamicToken<A> {
     fn eq(&self, other: &Self) -> bool { self.scalar == other.scalar }
 }
 
-impl<A: ScalarAllocator> Hash for DynamicToken<A> {
+impl<A: ScalarAllocator> Hash for DynamicToken<A>
+where
+    A::Scalar: Hash,
+{
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) { self.scalar.hash(state) }
 }
 
-impl<A: ScalarAllocator> PartialOrd for DynamicToken<A> {
+impl<A: ScalarAllocator> PartialOrd for DynamicToken<A>
+where
+    A::Scalar: PartialOrd,
+{
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { self.scalar.partial_cmp(&other.scalar) }
 }
 
-impl<A: ScalarAllocator> Ord for DynamicToken<A> {
+impl<A: ScalarAllocator> Ord for DynamicToken<A>
+where
+    A::Scalar: Ord,
+{
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering { self.scalar.cmp(&other.scalar) }
 }

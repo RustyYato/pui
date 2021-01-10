@@ -96,7 +96,10 @@ cfg_if::cfg_if! {
             fn remove_mut(&mut self) -> Option<OpaqueScalar<A>> { self.pop_front() }
         }
 
-        impl<A: ScalarAllocator> PoolMut<A> for std::collections::BinaryHeap<OpaqueScalar<A>> {
+        impl<A: ScalarAllocator> PoolMut<A> for std::collections::BinaryHeap<OpaqueScalar<A>>
+        where
+            A::Scalar: Ord,
+        {
             fn insert_mut(&mut self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> {
                 self.push(scalar);
                 None
