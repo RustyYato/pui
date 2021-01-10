@@ -11,9 +11,15 @@ mod seal {
     }
 }
 
+/// A trait that defines all the types defines how to get all
+/// of mutable references out of the heterogeneous list
+/// of [`IdCell`]s.
 pub trait GetAllMut<I>: Seal {
+    /// A hlist of mutable references
     type Output;
 
+    /// Gets all mutable references from the `IdCell`s, returns
+    /// `None` if some of the types overlap
     fn get_all_mut(self, ident: I) -> Option<Self::Output>;
 }
 
