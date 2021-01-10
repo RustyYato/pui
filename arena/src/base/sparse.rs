@@ -120,7 +120,7 @@ struct Slot<T, V: Version> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
-pub struct Key<Id, V = crate::version::DefaultVersion> {
+pub struct Key<Id, V = crate::version::SavedDefaultVersion> {
     id: Id,
     version: V,
 }

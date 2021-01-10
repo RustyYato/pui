@@ -15,7 +15,7 @@ mod iter_unchecked;
 use iter_unchecked::IteratorUnchecked;
 
 #[derive(Clone, Copy)]
-pub struct Key<Id, V = crate::version::DefaultVersion> {
+pub struct Key<Id, V = crate::version::SavedDefaultVersion> {
     id: Id,
     version: V,
 }

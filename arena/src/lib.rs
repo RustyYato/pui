@@ -1,6 +1,9 @@
 #![no_std]
-// FIXME - remove this when documenting all features
-#![allow(clippy::missing_safety_doc)]
+#![forbid(missing_docs, clippy::missing_safety_doc)]
+
+//! A set of very efficient, and very customizable arenas that
+//! can elide bounds checks wherever possible.
+//!
 
 #[doc(hidden)]
 pub extern crate alloc as std;
