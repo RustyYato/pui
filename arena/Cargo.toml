@@ -1,8 +1,13 @@
 [package]
 name = "pui-arena"
-version = "0.1.0"
+version = "0.5.0"
 authors = ["RustyYato <krishna.sd.2012@gmail.com>"]
 edition = "2018"
+keywords = ["identifier", "unique", "arena"]
+categories = ["no-std", "data-structures"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/RustyYato/pui"
+description = "Generalized Arenas that can be used on `no_std`"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,8 +19,8 @@ slab = []
 scoped = ['pui']
 
 [dependencies]
-pui-core = { path = '../core', default-features = false, optional = true }
-pui-vec = { path = '../vec' }
+pui-core = { path = '../core', version = '0.5.1', default-features = false, optional = true }
+pui-vec = { path = '../vec', version = '0.5' }
 
 [dev-dependencies]
 criterion = "0.3"

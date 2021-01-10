@@ -8,8 +8,11 @@
 //! You can also create a new `Type`, but then the burden
 //! is on you to ensure uniqueness.
 
-use core::{fmt, marker::PhantomData};
-use std::hash::{Hash, Hasher};
+use core::{
+    fmt,
+    hash::{Hash, Hasher},
+    marker::PhantomData,
+};
 
 use crate::{Identifier, Init, OneShotIdentifier, Token, Trivial};
 

@@ -3,6 +3,11 @@ name = "pui"
 version = "0.5.0"
 authors = ["RustyYato <krishna.sd.2012@gmail.com>"]
 edition = "2018"
+keywords = ["identifier", "unique"]
+categories = ["no-std"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/RustyYato/pui"
+description = "Process unique identifiers, and abstractions built atop them"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,7 +16,7 @@ edition = "2018"
 std = []
 
 [dependencies]
-pui-core = { path = '../core' }
-pui-vec = { path = '../vec', features = ['pui'] }
-pui-arena = { path = '../arena', features = ['pui', 'slotmap', 'slab', 'scoped'] }
-pui-cell = { path = '../cell' }
+pui-core = { path = '../core', version = '0.5.1' }
+pui-vec = { path = '../vec', version = '0.5', features = ['pui'] }
+pui-arena = { path = '../arena', version = '0.5', features = ['pui', 'slotmap', 'slab', 'scoped'] }
+pui-cell = { path = '../cell', version = '0.5' }
