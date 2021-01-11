@@ -1,7 +1,6 @@
-use pui_arena::base::hop::{Arena, Key as HopKey};
+use pui_arena::base::hop::Arena;
 
-type Key = HopKey<usize, SavedTestVersion>;
-// type Key = HopKey<usize>;
+type Key = pui_arena::Key<usize, SavedTestVersion>;
 
 #[derive(Debug, Clone, Copy)]
 struct TestVersion(u8);

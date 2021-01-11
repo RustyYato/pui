@@ -16,6 +16,9 @@ pub extern crate alloc as std;
 
 pub mod version;
 
+mod arena_access;
+pub use arena_access::{ArenaAccess, BuildArenaKey, CompleteValidator, Key, Validator};
+
 /// the core implementations of different types of arenas
 pub mod base {
     pub mod dense;

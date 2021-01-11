@@ -32,7 +32,7 @@ macro_rules! imp_slot_map {
         pub struct VacantEntry<'a, T>(pub imp::VacantEntry<'a, T, ()>);
 
         /// The key for [`SlotMap`]
-        pub type Key = key::Key<usize>;
+        pub type Key = $crate::Key<usize>;
 
         /// Returned from [`SlotMap::entries`]
         pub type Entries<'a, T> = imp::Entries<'a, T, (), DefaultVersion, usize>;
@@ -136,10 +136,7 @@ pub mod dense {
     use core::ops::{Index, IndexMut};
 
     use crate::{
-        base::{
-            dense::{self as imp, Arena},
-            sparse as key,
-        },
+        base::dense::{self as imp, Arena},
         version::DefaultVersion,
     };
 
@@ -172,7 +169,7 @@ pub mod hop {
     use core::ops::{Index, IndexMut};
 
     use crate::{
-        base::hop::{self as imp, self as key, Arena},
+        base::hop::{self as imp, Arena},
         version::DefaultVersion,
     };
 
@@ -205,7 +202,7 @@ pub mod sparse {
     use core::ops::{Index, IndexMut};
 
     use crate::{
-        base::sparse::{self as imp, self as key, Arena},
+        base::sparse::{self as imp, Arena},
         version::DefaultVersion,
     };
 

@@ -28,7 +28,7 @@ use core::{
 
 use pui_vec::PuiVec;
 
-use crate::version::Version;
+use crate::{version::Version, ArenaAccess, BuildArenaKey};
 
 mod imp;
 use imp::Slot;
@@ -37,149 +37,11 @@ pub use imp::VacantEntry;
 mod iter_unchecked;
 use iter_unchecked::IteratorUnchecked;
 
-/// A key into a hop arena
-#[derive(Clone, Copy)]
-pub struct Key<Id, V = crate::version::SavedDefaultVersion> {
-    id: Id,
-    version: V,
-}
-
 /// A hop arena
 #[derive(Debug, Clone)]
 pub struct Arena<T, I = (), V: Version = crate::version::DefaultVersion> {
     slots: PuiVec<Slot<T, V>, I>,
     num_elements: usize,
-}
-
-/// A trait to access elements of a hop [`Arena`]
-pub unsafe trait ArenaAccess<I, V: Version> {
-    #[doc(hidden)]
-    fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool;
-
-    /// The index of this key
-    fn index(&self) -> usize;
-}
-
-/// A trait to create keys from an arena
-pub trait BuildArenaKey<I, V: Version>: ArenaAccess<I, V> {
-    #[doc(hidden)]
-    unsafe fn new_unchecked(index: usize, version: V::Save, ident: &I) -> Self;
-}
-
-unsafe impl<K: ?Sized + ArenaAccess<I, V>, I, V: Version> ArenaAccess<I, V> for &K {
-    #[doc(hidden)]
-    fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool { K::contained_in(self, arena) }
-
-    fn index(&self) -> usize { K::index(self) }
-}
-
-unsafe impl<I, V: Version> ArenaAccess<I, V> for usize {
-    #[doc(hidden)]
-    fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
-        arena.slots.get(*self).map_or(false, Slot::is_occupied)
-    }
-
-    fn index(&self) -> usize { *self }
-}
-
-impl<I, V: Version> BuildArenaKey<I, V> for usize {
-    #[doc(hidden)]
-    unsafe fn new_unchecked(index: usize, _: V::Save, _: &I) -> Self { index }
-}
-
-unsafe impl<I, V: Version> ArenaAccess<I, V> for crate::TrustedIndex {
-    #[doc(hidden)]
-    fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
-        unsafe { arena.slots.get_unchecked(self.0).is_occupied() }
-    }
-
-    fn index(&self) -> usize { self.0 }
-}
-
-#[cfg(feature = "pui-core")]
-#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
-unsafe impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for pui_vec::Id<I::Token> {
-    #[doc(hidden)]
-    fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool { arena.slots.get(self).map_or(false, Slot::is_occupied) }
-
-    fn index(&self) -> usize { self.get() }
-}
-
-#[cfg(feature = "pui-core")]
-#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
-impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for pui_vec::Id<I::Token> {
-    #[doc(hidden)]
-    unsafe fn new_unchecked(index: usize, _: V::Save, ident: &I) -> Self {
-        pui_vec::Id::new_unchecked(index, ident.token())
-    }
-}
-
-unsafe impl<I, V: Version> ArenaAccess<I, V> for Key<usize, V::Save> {
-    #[doc(hidden)]
-    fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
-        let saved = self.version;
-        arena
-            .slots
-            .get(self.id)
-            .map_or(false, |slot| slot.version().equals_saved(saved))
-    }
-
-    fn index(&self) -> usize { self.id }
-}
-
-impl<I, V: Version> BuildArenaKey<I, V> for Key<usize, V::Save> {
-    #[doc(hidden)]
-    unsafe fn new_unchecked(index: usize, version: V::Save, _: &I) -> Self { Key { id: index, version } }
-}
-
-unsafe impl<I, V: Version> ArenaAccess<I, V> for Key<crate::TrustedIndex, V::Save> {
-    #[doc(hidden)]
-    fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
-        unsafe {
-            let saved = self.version;
-            arena.slots.get_unchecked(self.id.0).version().equals_saved(saved)
-        }
-    }
-
-    fn index(&self) -> usize { self.id.0 }
-}
-
-#[cfg(feature = "pui-core")]
-#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
-unsafe impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for Key<pui_vec::Id<I::Token>, V::Save> {
-    #[doc(hidden)]
-    fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
-        let saved = self.version;
-        arena
-            .slots
-            .get(&self.id)
-            .map_or(false, |slot| slot.version().equals_saved(saved))
-    }
-
-    fn index(&self) -> usize { self.id.get() }
-}
-
-#[cfg(feature = "pui-core")]
-#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
-impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for Key<pui_vec::Id<I::Token>, V::Save> {
-    #[doc(hidden)]
-    unsafe fn new_unchecked(index: usize, version: V::Save, ident: &I) -> Self {
-        Key {
-            id: pui_vec::Id::new_unchecked(index, ident.token()),
-            version,
-        }
-    }
-}
-
-impl<Id, V> Key<Id, V> {
-    /// Create a new key from an id and version
-    pub const fn new(id: Id, version: V) -> Self { Self { id, version } }
-
-    /// The id the given key
-    pub const fn id(&self) -> &Id { &self.id }
-
-    /// The version of the given key
-    pub const fn version(&self) -> &V { &self.version }
 }
 
 impl<T> Default for Arena<T> {
@@ -249,7 +111,19 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn insert<K: BuildArenaKey<I, V>>(&mut self, value: T) -> K { self.vacant_entry().insert(value) }
 
     /// Return true if a value is associated with the given key.
-    pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool { key.contained_in(self) }
+    pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool {
+        let index = match key.validate_ident(self.ident(), crate::Validator::new()).into_inner() {
+            Err(index) if self.slots.len() <= index => return false,
+            Ok(index) | Err(index) => index,
+        };
+
+        let version = unsafe { self.slots.get_unchecked(index).version() };
+
+        match key.version() {
+            Some(saved) => version.equals_saved(saved),
+            None => version.is_full(),
+        }
+    }
 
     /// Remove and return the value associated with the given key.
     ///

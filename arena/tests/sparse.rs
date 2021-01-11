@@ -1,6 +1,6 @@
-use pui_arena::base::sparse::{Arena, Key as SparseKey};
+use pui_arena::base::sparse::Arena;
 
-type Key = SparseKey<usize, SavedTestVersion>;
+type Key = pui_arena::Key<usize, SavedTestVersion>;
 
 #[derive(Debug, Clone, Copy)]
 struct TestVersion(u8);

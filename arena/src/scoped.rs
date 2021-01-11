@@ -29,7 +29,7 @@ macro_rules! imp_scoped {
         ($($version:ident)?)
     ) => {
         /// The key for [`ScopedArena`]
-        pub type Key<'scope, V = crate::version::DefaultVersion> = key::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, <V as crate::version::Version>::Save>;
+        pub type Key<'scope, V = crate::version::DefaultVersion> = $crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, <V as crate::version::Version>::Save>;
 
         /// The backing arena type
         pub type BaseArena<'scope, T, V = crate::version::DefaultVersion> = imp::Arena<T, pui_core::scoped::Scoped<'scope>, V>;
@@ -141,7 +141,6 @@ macro_rules! imp_scoped {
         pub mod sparse {
             use core::ops::*;
             use crate::base::sparse as imp;
-            use crate::base::sparse as key;
 
             /// Returned from [`ScopedArena::iter`]
             pub type Iter<'a, T, V = crate::version::DefaultVersion> = imp::Iter<'a, T, V>;
@@ -172,7 +171,6 @@ macro_rules! imp_scoped {
         pub mod hop {
             use core::ops::*;
             use crate::base::hop as imp;
-            use crate::base::hop as key;
 
             /// Returned from [`ScopedArena::iter`]
             pub type Iter<'a, T, V = crate::version::DefaultVersion> = imp::Iter<'a, T, V>;
@@ -203,7 +201,6 @@ macro_rules! imp_scoped {
         pub mod dense {
             use core::ops::*;
             use crate::base::dense as imp;
-            use crate::base::sparse as key;
 
             /// Returned from [`ScopedArena::iter`]
             pub type Iter<'a, T> = core::slice::Iter<'a, T>;

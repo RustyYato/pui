@@ -22,8 +22,9 @@ use core::{
 use std::{boxed::Box, vec::Vec};
 
 use crate::{
-    base::sparse::{Arena as SparseArena, ArenaAccess, BuildArenaKey, VacantEntry as SparseVacantEntry},
+    base::sparse::{Arena as SparseArena, VacantEntry as SparseVacantEntry},
     version::{DefaultVersion, Version},
+    ArenaAccess, BuildArenaKey,
 };
 
 // FIXME - a dense arena doesn't need to use `Vec<T>`, instead it can use
