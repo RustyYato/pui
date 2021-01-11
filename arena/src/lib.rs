@@ -7,6 +7,9 @@
 //! A set of very efficient, and very customizable arenas that
 //! can elide bounds checks wherever possible.
 //!
+//! This crate is heavily inspired by crates like [`slotmap`](crates.io/crate/slotmap)
+//! and [`slab`](crates.io/crate/slab).
+//!
 
 #[doc(hidden)]
 pub extern crate alloc as std;

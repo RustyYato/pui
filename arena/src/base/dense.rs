@@ -1,4 +1,17 @@
-//! a dense arena
+//! Dense Arenas - Slow Access, Super-Fast Iteration, Slow Mutation, Large memory footprint
+//!
+//! A dense arena stores all of it's values in a `Vec<_>`,and stores the
+//! slots-state seprately. However, this requries a double indirection to access
+//! values, so it will be slower to acces. The benefit to this layout however, is
+//! faster iteration. Iterating over the values is just iterating over a slice.
+//! So it's orders of magnitude faster than either hop arenas or sparse arenas.
+//!
+//! The other downside to dense arenas, is they require 3 separate allocations,
+//! one for the slots, one for the values, and one to convert indicies in the
+//! values allocation to indicies in the slots allocation.
+//!
+//! Each slot is versioned by using [`Version`] trait. See [`Version`] for docs
+//! on version exhaustion. Once a slot's version exhausts, it will not be reused.
 
 use core::{
     marker::PhantomData,

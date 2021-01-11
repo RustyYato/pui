@@ -2,6 +2,47 @@
 
 /// The versioning strategy
 ///
+/// # Slot Exhaustion
+///
+/// Arenas store a version alongside each slot they have. If a slot's version is
+/// exhausted, then that slot will *never* be reused. For [`DefaultVersion`]
+/// this will only happen after about 2 billion insertion/deletion pairs *per slot*,
+/// so it shouldn't be an issue. However, for smaller version types like [`TinyVersion`]
+/// each slot will exhaust after only 127 insertion/deletion pairs per slot.
+///
+/// You can avoid version exahustion by using [`Unversioned`], but this suffers from the
+/// ABA problem.
+///
+/// # ABA problem
+///
+/// [Wikipedia](https://en.wikipedia.org/wiki/ABA_problem)
+///
+/// Consider this sequence of operations:
+///
+/// ``` should_panic
+/// use pui_arena::version::UnversionedFull;
+/// # use pui_arena::base::sparse::Key;
+/// # let mut arena = pui_arena::base::sparse::Arena::<_, (), pui_arena::version::Unversioned>::INIT;
+/// // insert 0 at index 0, arena = [(version: Unversioned::Full, Some(0))]
+/// let a: Key<usize, UnversionedFull> = arena.insert(0);
+/// // remove at index 0, arena = [(version: Unversioned::Empty, None)]
+/// arena.remove(a);
+/// // insert 10 at index 0, arena = [(version: Unversioned::Full, Some(10))]
+/// let b: Key<usize, UnversionedFull> = arena.insert(10);
+/// // get the value at index 0
+/// assert_eq!(arena.get(a), None);
+/// ```
+///
+/// because `arena` is using `Unversioned` slots, even though key `a` was removed from the
+/// `arena`, we can still access it! This is fundementally what the ABA problem is. Even
+/// though a key was removed, the arena can't distinguish stale keys so it allows access
+/// to the new values when it shouldn't.
+///
+/// Depending on your problem space, this may or may not be a problem you need to sove.
+/// If it is a problem you need to solve, then you will need to deal with version exhaustion
+/// in some way, because there are never going to be an infinite number of versions. `pui-arena`
+/// handles this for you by "leaking" slots with exhausted versions. These slots will not
+/// be reused, but will be deallocated once the `Arena` drops.
 pub unsafe trait Version: Copy {
     /// Represents a full version
     type Save: Copy;
@@ -11,12 +52,12 @@ pub unsafe trait Version: Copy {
 
     /// Convert an full version to a empty version
     ///
-    /// returns `None` if there are no more versions
+    /// returns `Err` if there are no more versions
     ///
     /// # Safety
     ///
     /// `mark_empty` can only be called on a full version
-    unsafe fn mark_empty(self) -> Option<Self>;
+    unsafe fn mark_empty(self) -> Result<Self, Self>;
 
     /// Convert an empty version to a full version
     ///
@@ -25,6 +66,8 @@ pub unsafe trait Version: Copy {
     /// `mark_full` can only be called on a empty version
     unsafe fn mark_full(self) -> Self;
 
+    /// Check if the version is exhausted
+    fn is_exhausted(&self) -> bool;
     /// Check if the version is empty
     fn is_empty(self) -> bool { !self.is_full() }
     /// Check if the version is full
@@ -58,13 +101,21 @@ pub struct SavedDefaultVersion(u32);
 unsafe impl Version for DefaultVersion {
     type Save = SavedDefaultVersion;
 
-    const EMPTY: Self = Self(0);
+    const EMPTY: Self = Self(1);
 
-    unsafe fn mark_empty(self) -> Option<Self> { self.0.checked_add(1).map(Self) }
+    unsafe fn mark_empty(self) -> Result<Self, Self> {
+        let next = Self(self.0 | 1);
+        match self.0.checked_add(2) {
+            Some(_) => Ok(next),
+            None => Err(next),
+        }
+    }
 
-    unsafe fn mark_full(self) -> Self { Self(self.0 | 1) }
+    fn is_exhausted(&self) -> bool { self.0 == u32::MAX }
 
-    fn is_full(self) -> bool { self.0 & 1 != 0 }
+    unsafe fn mark_full(self) -> Self { Self(self.0.wrapping_add(1)) }
+
+    fn is_full(self) -> bool { self.0 & 1 == 0 }
 
     unsafe fn save(self) -> Self::Save { SavedDefaultVersion(self.0) }
 
@@ -84,11 +135,19 @@ pub struct SavedTinyVersion(u8);
 unsafe impl Version for TinyVersion {
     type Save = SavedTinyVersion;
 
-    const EMPTY: Self = Self(0);
+    const EMPTY: Self = Self(1);
 
-    unsafe fn mark_empty(self) -> Option<Self> { self.0.checked_add(1).map(Self) }
+    unsafe fn mark_empty(self) -> Result<Self, Self> {
+        let next = Self(self.0 | 1);
+        match self.0.checked_add(2) {
+            Some(_) => Ok(next),
+            None => Err(next),
+        }
+    }
 
-    unsafe fn mark_full(self) -> Self { Self(self.0 | 1) }
+    unsafe fn mark_full(self) -> Self { Self(self.0.wrapping_add(1)) }
+
+    fn is_exhausted(&self) -> bool { self.0 == u8::MAX }
 
     fn is_full(self) -> bool { self.0 & 1 != 0 }
 
@@ -116,9 +175,11 @@ unsafe impl Version for Unversioned {
 
     const EMPTY: Self = Self::Empty;
 
-    unsafe fn mark_empty(self) -> Option<Self> { Some(Self::Empty) }
+    unsafe fn mark_empty(self) -> Result<Self, Self> { Ok(Self::Empty) }
 
     unsafe fn mark_full(self) -> Self { Self::Full }
+
+    fn is_exhausted(&self) -> bool { false }
 
     fn is_full(self) -> bool { matches!(self, Self::Full) }
 

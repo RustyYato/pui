@@ -297,20 +297,25 @@ unsafe fn remove_slot_from_freelist<T, V: Version>(slots: &mut [Slot<T, V>], ind
 unsafe fn insert_slot_into_freelist<T, V: Version>(slots: &mut [Slot<T, V>], index: usize) {
     let slot = slots.get_unchecked_mut(index);
     match slot.version.mark_empty() {
-        Some(next_version) => slot.version = next_version,
-        None => {
+        Ok(next_version) => slot.version = next_version,
+        Err(version) => {
             // this slot has exhausted it's version counter, so
             // omit it from the freelist and it will never be used again
 
             // this is works with iteration because iteration always checks
             // if the current slot is vacant, and then accesses `free.other_end`
             slot.data.mu_free.other_end = MaybeUninit::new(index);
+            slot.version = version;
             return
         }
     }
 
-    let is_left_vacant = slots.get_unchecked(index.wrapping_sub(1)).is_vacant();
-    let is_right_vacant = slots.get(index.wrapping_add(1)).map_or(false, Slot::is_vacant);
+    let left = slots.get_unchecked(index.wrapping_sub(1)).version;
+    let is_left_vacant = left.is_empty() && !left.is_exhausted();
+    let is_right_vacant = slots.get(index.wrapping_add(1)).map_or(false, |slot| {
+        let right = slot.version;
+        right.is_empty() && !right.is_exhausted()
+    });
 
     match (is_left_vacant, is_right_vacant) {
         (false, false) => {

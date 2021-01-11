@@ -1,4 +1,25 @@
-//! a hop arena
+//! Hop Arenas - Fast Access, Fast Iteration, Slow Mutation, Small memory footprint
+//!
+//! A hop arena has a minimal footprint, it stores a doubly-linked-list of empty
+//! slots embeded in the same location as the values, so as long as the size
+//! of you values is greater than or equal to `[usize; 3]`, then there is no memory
+//! overhead. This doubly-linked-list of empty slots means that insertion and deletion
+//! are `O(1)` operations.
+//!
+//! This doubly-linked-list also encodes just enough inforation to about vacant slots
+//! that you can skip over all contiguous vacant slots in one go while iterating. This
+//! means if there are large blocks of vacant slots, a hop arena will efficiently jump
+//! over the entire block in one go.
+//!
+//! While this method of iteration is faster than sparse arenas, it still can't compare
+//! to dense arenas. However, hop arenas are more memory efficient than dense arenas.
+//!
+//! Each slot is versioned by using [`Version`] trait. See [`Version`] for docs
+//! on version exhaustion. Once a slot's version exhausts, it will not be pushed
+//! onto the doubly-linked list. This prevents it from ever being used again.
+
+// FIXME - version exhaustion should be handled when iterating or inserting elements
+// into the arena.
 
 use core::{
     marker::PhantomData,
@@ -490,13 +511,16 @@ impl<I: IteratorUnchecked> Iterator for OccupiedBase<I> {
         self.len = self.len.checked_sub(1)?;
 
         unsafe {
-            let index = self.slots.index();
-            let slot = self.slots.peek();
-            if slot.is_vacant() {
-                let skip = slot.other_end().wrapping_sub(index).wrapping_add(1);
-                self.slots.advance(skip);
+            loop {
+                let index = self.slots.index();
+                let slot = self.slots.peek();
+                if slot.is_vacant() {
+                    let skip = slot.other_end().wrapping_sub(index).wrapping_add(1);
+                    self.slots.advance(skip);
+                } else {
+                    return Some(self.slots.next())
+                }
             }
-            Some(self.slots.next())
         }
     }
 
@@ -510,13 +534,16 @@ impl<I: IteratorUnchecked> DoubleEndedIterator for OccupiedBase<I> {
         self.len = self.len.checked_sub(1)?;
 
         unsafe {
-            let index = self.slots.index_back();
-            let slot = self.slots.peek_back();
-            if slot.is_vacant() {
-                let skip = index.wrapping_sub(slot.other_end());
-                self.slots.advance_back(skip);
+            loop {
+                let index = self.slots.index_back();
+                let slot = self.slots.peek_back();
+                if slot.is_vacant() {
+                    let skip = index.wrapping_sub(slot.other_end());
+                    self.slots.advance_back(skip);
+                } else {
+                    return Some(self.slots.next_back())
+                }
             }
-            Some(self.slots.next_back())
         }
     }
 }

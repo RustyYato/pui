@@ -1,4 +1,14 @@
-//! a sparse arena
+//! Sparse Arenas - Fast Access, Slow Iteration, Fast Mutation, Small memory footprint
+//!
+//! A sparse arena has a minimal footprint, it stores a linked-list of empty
+//! slots embeded in the same location as the values, so as long as the size
+//! of you values is greater than or equal to `usize`, then there is no memory
+//! overhead. This linked-list of empty slots means that insertion and deletion
+//! are `O(1)` operations.
+//!
+//! Each slot is versioned by using [`Version`] trait. See [`Version`] for docs
+//! on version exhaustion. Once a slot's version exhausts, it will not be pushed
+//! onto the linked list. This prevents it from ever being used again.
 
 use core::{
     marker::PhantomData,
@@ -9,6 +19,37 @@ use core::{
 use pui_vec::PuiVec;
 
 use crate::version::{DefaultVersion, Version};
+
+union Data<T> {
+    value: ManuallyDrop<T>,
+    next: usize,
+}
+
+struct Slot<T, V: Version> {
+    version: V,
+    data: Data<T>,
+}
+
+/// A key into a sparse arena
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+pub struct Key<Id, V = crate::version::SavedDefaultVersion> {
+    id: Id,
+    version: V,
+}
+
+/// A sparse arena
+#[derive(Debug, Clone)]
+pub struct Arena<T, I = (), V: Version = DefaultVersion> {
+    slots: PuiVec<Slot<T, V>, I>,
+    next: usize,
+    num_elements: usize,
+}
+
+/// An empty slot in a sparse arena
+pub struct VacantEntry<'a, T, I, V: Version = DefaultVersion> {
+    arena: &'a mut Arena<T, I, V>,
+    new_next: usize,
+}
 
 /// A trait to access elements of a sparse [`Arena`]
 pub trait ArenaAccess<I, V: Version> {
@@ -130,37 +171,6 @@ impl<I, V: Version> ArenaAccess<I, V> for Key<crate::TrustedIndex, V::Save> {
     fn index(&self) -> usize { self.id.0 }
 }
 
-union Data<T> {
-    value: ManuallyDrop<T>,
-    next: usize,
-}
-
-struct Slot<T, V: Version> {
-    version: V,
-    data: Data<T>,
-}
-
-/// A key into a sparse arena
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
-pub struct Key<Id, V = crate::version::SavedDefaultVersion> {
-    id: Id,
-    version: V,
-}
-
-/// A sparse arena
-#[derive(Debug, Clone)]
-pub struct Arena<T, I = (), V: Version = DefaultVersion> {
-    slots: PuiVec<Slot<T, V>, I>,
-    next: usize,
-    num_elements: usize,
-}
-
-/// An empty slot in a sparse arena
-pub struct VacantEntry<'a, T, I, V: Version = DefaultVersion> {
-    arena: &'a mut Arena<T, I, V>,
-    new_next: usize,
-}
-
 impl<T, V: Version> Drop for Slot<T, V> {
     fn drop(&mut self) {
         if self.version.is_full() {
@@ -172,13 +182,17 @@ impl<T, V: Version> Drop for Slot<T, V> {
 impl<T, V: Version> Slot<T, V> {
     unsafe fn remove_unchecked(&mut self, index: usize, next: &mut usize) -> T {
         let value = ManuallyDrop::take(&mut self.data.value);
-        if let Some(next_version) = self.version.mark_empty() {
-            self.version = next_version;
+        match self.version.mark_empty() {
+            Ok(next_version) => {
+                self.version = next_version;
 
-            self.data = Data {
-                next: replace(next, index),
-            };
+                self.data = Data {
+                    next: replace(next, index),
+                };
+            }
+            Err(next_version) => self.version = next_version,
         }
+
         value
     }
 
@@ -188,12 +202,15 @@ impl<T, V: Version> Slot<T, V> {
         impl<T, V: Version> Drop for Fixup<'_, T, V> {
             fn drop(&mut self) {
                 let Self(ref mut slot, index, ref mut next) = *self;
-                if let Some(next_version) = unsafe { slot.version.mark_empty() } {
-                    slot.version = next_version;
+                match unsafe { slot.version.mark_empty() } {
+                    Err(next_version) => slot.version = next_version,
+                    Ok(next_version) => {
+                        slot.version = next_version;
 
-                    slot.data = Data {
-                        next: replace(next, index),
-                    };
+                        slot.data = Data {
+                            next: replace(next, index),
+                        };
+                    }
                 }
             }
         }
