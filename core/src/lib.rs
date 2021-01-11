@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(clippy::declare_interior_mutable_const)]
 #![forbid(missing_docs, clippy::missing_safety_doc)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! `pui-core` provides process unique identifiers. These identifiers, as the name
 //! suggests are unique within the process they reside in. `pui-core` also provides
@@ -147,6 +148,7 @@ unsafe impl<I: ?Sized + Identifier> Identifier for &mut I {
 }
 
 #[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 unsafe impl<I: ?Sized + Identifier> Identifier for std::boxed::Box<I> {
     type Token = I::Token;
 
@@ -156,4 +158,5 @@ unsafe impl<I: ?Sized + Identifier> Identifier for std::boxed::Box<I> {
 }
 
 #[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 unsafe impl<I: ?Sized + OneShotIdentifier> OneShotIdentifier for std::boxed::Box<I> {}

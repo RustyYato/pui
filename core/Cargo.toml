@@ -1,6 +1,6 @@
 [package]
 name = "pui-core"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["RustyYato <krishna.sd.2012@gmail.com>"]
 edition = "2018"
 keywords = ["identifier", "unique"]
@@ -8,6 +8,9 @@ categories = ["no-std"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/RustyYato/pui"
 description = "Process unique identifiers"
+
+[package.metadata.docs.rs]
+features = ['std', 'parking_lot', 'once_cell']
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

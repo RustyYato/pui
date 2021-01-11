@@ -74,6 +74,7 @@ impl<A: ScalarAllocator> PoolMut<A> for Option<OpaqueScalar<A>> {
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "alloc")] {
+        #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
         impl<T> Init for std::vec::Vec<T> {
             const INIT: Self = std::vec::Vec::new();
         }
@@ -112,22 +113,25 @@ cfg_if::cfg_if! {
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "std")] {
-
         #[doc(hidden)]
+        #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
         pub struct LocalKey<P: 'static>(pub &'static std::thread::LocalKey<P>);
 
+        #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
         impl<A: ScalarAllocator, P: Pool<A>> PoolMut<A> for LocalKey<P> {
             fn insert_mut(&mut self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.insert(scalar) }
 
             fn remove_mut(&mut self) -> Option<OpaqueScalar<A>> { self.remove() }
         }
 
+        #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
         impl<A: ScalarAllocator, P: Pool<A>> Pool<A> for LocalKey<P> {
             fn insert(&self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.0.with(|pool| pool.insert(scalar)) }
 
             fn remove(&self) -> Option<OpaqueScalar<A>> { self.0.with(P::remove) }
         }
 
+        #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
         impl<A: ScalarAllocator, P: PoolMut<A>> PoolMut<A> for std::sync::Mutex<P> {
             fn insert_mut(&mut self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> {
                 self.get_mut().ok()?.insert_mut(scalar)
@@ -136,6 +140,7 @@ cfg_if::cfg_if! {
             fn remove_mut(&mut self) -> Option<OpaqueScalar<A>> { self.get_mut().ok()?.remove_mut() }
         }
 
+        #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
         impl<A: ScalarAllocator, P: PoolMut<A>> Pool<A> for std::sync::Mutex<P> {
             fn insert(&self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.lock().ok()?.insert_mut(scalar) }
 
@@ -146,16 +151,19 @@ cfg_if::cfg_if! {
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "parking_lot")] {
+        #[cfg_attr(docsrs, doc(cfg(feature = "parking_lot")))]
         impl<P: Init> Init for parking_lot::Mutex<P> {
             const INIT: Self = parking_lot::Mutex::const_new(parking_lot::lock_api::RawMutex::INIT, P::INIT);
         }
 
+        #[cfg_attr(docsrs, doc(cfg(feature = "parking_lot")))]
         impl<A: ScalarAllocator, P: PoolMut<A>> PoolMut<A> for parking_lot::Mutex<P> {
             fn insert_mut(&mut self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.get_mut().insert_mut(scalar) }
 
             fn remove_mut(&mut self) -> Option<OpaqueScalar<A>> { self.get_mut().remove_mut() }
         }
 
+        #[cfg_attr(docsrs, doc(cfg(feature = "parking_lot")))]
         impl<A: ScalarAllocator, P: PoolMut<A>> Pool<A> for parking_lot::Mutex<P> {
             fn insert(&self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.lock().insert_mut(scalar) }
 
@@ -166,32 +174,38 @@ cfg_if::cfg_if! {
 
 cfg_if::cfg_if! {
     if #[cfg(any(feature = "parking_lot", feature = "std"))] {
+        #[cfg_attr(docsrs, doc(cfg(any(feature = "parking_lot", feature = "std"))))]
         impl<A: ScalarAllocator> Init for super::SyncStackPool<A> {
             const INIT: Self = super::SyncStackPool(Init::INIT);
         }
 
+        #[cfg_attr(docsrs, doc(cfg(any(feature = "parking_lot", feature = "std"))))]
         impl<A: ScalarAllocator> PoolMut<A> for super::SyncStackPool<A> {
             fn insert_mut(&mut self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.0.insert_mut(scalar) }
 
             fn remove_mut(&mut self) -> Option<OpaqueScalar<A>> { self.0.remove_mut() }
         }
 
+        #[cfg_attr(docsrs, doc(cfg(any(feature = "parking_lot", feature = "std"))))]
         impl<A: ScalarAllocator> Pool<A> for super::SyncStackPool<A> {
             fn insert(&self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.0.insert(scalar) }
 
             fn remove(&self) -> Option<OpaqueScalar<A>> { self.0.remove() }
         }
 
+        #[cfg_attr(docsrs, doc(cfg(any(feature = "parking_lot", feature = "std"))))]
         impl<A: ScalarAllocator> Init for super::SyncQueuePool<A> {
             const INIT: Self = super::SyncQueuePool(Init::INIT);
         }
 
+        #[cfg_attr(docsrs, doc(cfg(any(feature = "parking_lot", feature = "std"))))]
         impl<A: ScalarAllocator> PoolMut<A> for super::SyncQueuePool<A> {
             fn insert_mut(&mut self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.0.insert_mut(scalar) }
 
             fn remove_mut(&mut self) -> Option<OpaqueScalar<A>> { self.0.remove_mut() }
         }
 
+        #[cfg_attr(docsrs, doc(cfg(any(feature = "parking_lot", feature = "std"))))]
         impl<A: ScalarAllocator> Pool<A> for super::SyncQueuePool<A> {
             fn insert(&self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { self.0.insert(scalar) }
 
@@ -202,32 +216,38 @@ cfg_if::cfg_if! {
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "once_cell")] {
+        #[cfg_attr(docsrs, doc(cfg(feature = "once_cell")))]
         impl<P: Default> Init for once_cell::sync::Lazy<P> {
             const INIT: Self = Self::new(P::default);
         }
 
+        #[cfg_attr(docsrs, doc(cfg(feature = "once_cell")))]
         impl<A: ScalarAllocator, P: Pool<A>, F: FnOnce() -> P> PoolMut<A> for once_cell::sync::Lazy<P, F> {
             fn insert_mut(&mut self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { P::insert_mut(self, scalar) }
 
             fn remove_mut(&mut self) -> Option<OpaqueScalar<A>> { P::remove_mut(self) }
         }
 
+        #[cfg_attr(docsrs, doc(cfg(feature = "once_cell")))]
         impl<A: ScalarAllocator, P: Pool<A>, F: FnOnce() -> P> Pool<A> for once_cell::sync::Lazy<P, F> {
             fn insert(&self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { P::insert(self, scalar) }
 
             fn remove(&self) -> Option<OpaqueScalar<A>> { P::remove(self) }
         }
 
+        #[cfg_attr(docsrs, doc(cfg(feature = "once_cell")))]
         impl<P: Default> Init for once_cell::unsync::Lazy<P> {
             const INIT: Self = Self::new(P::default);
         }
 
+        #[cfg_attr(docsrs, doc(cfg(feature = "once_cell")))]
         impl<A: ScalarAllocator, P: Pool<A>, F: FnOnce() -> P> PoolMut<A> for once_cell::unsync::Lazy<P, F> {
             fn insert_mut(&mut self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { P::insert_mut(self, scalar) }
 
             fn remove_mut(&mut self) -> Option<OpaqueScalar<A>> { P::remove_mut(self) }
         }
 
+        #[cfg_attr(docsrs, doc(cfg(feature = "once_cell")))]
         impl<A: ScalarAllocator, P: Pool<A>, F: FnOnce() -> P> Pool<A> for once_cell::unsync::Lazy<P, F> {
             fn insert(&self, scalar: OpaqueScalar<A>) -> Option<OpaqueScalar<A>> { P::insert(self, scalar) }
 

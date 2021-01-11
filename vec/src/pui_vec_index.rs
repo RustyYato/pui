@@ -147,6 +147,7 @@ fn not_owned() -> ! { panic!("Tried to use an id that isn't owned by the `PuiVec
 #[cfg(feature = "pui-core")]
 impl<T> Seal for Id<T> {}
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: OneShotIdentifier> PuiVecIndex<I> for Id<I::Token> {
     type SliceIndex = usize;
 
@@ -162,6 +163,7 @@ impl<I: OneShotIdentifier> PuiVecIndex<I> for Id<I::Token> {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: OneShotIdentifier> BuildPuiVecIndex<I> for Id<I::Token> {
     unsafe fn new_unchecked(slice_index: Self::SliceIndex, ident: &I) -> Self {
         Id {
@@ -172,6 +174,7 @@ impl<I: OneShotIdentifier> BuildPuiVecIndex<I> for Id<I::Token> {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<T, I: OneShotIdentifier> PuiVecAccess<T, I> for Id<I::Token> {
     type Output = T;
 
@@ -187,6 +190,7 @@ impl<T, I: OneShotIdentifier> PuiVecAccess<T, I> for Id<I::Token> {
 #[cfg(feature = "pui-core")]
 impl<T> Seal for RangeTo<Id<T>> {}
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: OneShotIdentifier> PuiVecIndex<I> for RangeTo<Id<I::Token>> {
     type SliceIndex = RangeTo<usize>;
 
@@ -202,6 +206,7 @@ impl<I: OneShotIdentifier> PuiVecIndex<I> for RangeTo<Id<I::Token>> {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: OneShotIdentifier> BuildPuiVecIndex<I> for RangeTo<Id<I::Token>> {
     unsafe fn new_unchecked(slice_index: Self::SliceIndex, ident: &I) -> Self {
         ..Id {
@@ -212,6 +217,7 @@ impl<I: OneShotIdentifier> BuildPuiVecIndex<I> for RangeTo<Id<I::Token>> {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<T, I: OneShotIdentifier> PuiVecAccess<T, I> for RangeTo<Id<I::Token>> {
     type Output = [T];
 
@@ -227,6 +233,7 @@ impl<T, I: OneShotIdentifier> PuiVecAccess<T, I> for RangeTo<Id<I::Token>> {
 #[cfg(feature = "pui-core")]
 impl<T> Seal for RangeFrom<Id<T>> {}
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: OneShotIdentifier> PuiVecIndex<I> for RangeFrom<Id<I::Token>> {
     type SliceIndex = RangeFrom<usize>;
 
@@ -242,6 +249,7 @@ impl<I: OneShotIdentifier> PuiVecIndex<I> for RangeFrom<Id<I::Token>> {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: OneShotIdentifier> BuildPuiVecIndex<I> for RangeFrom<Id<I::Token>> {
     unsafe fn new_unchecked(slice_index: Self::SliceIndex, ident: &I) -> Self {
         Id {
@@ -252,6 +260,7 @@ impl<I: OneShotIdentifier> BuildPuiVecIndex<I> for RangeFrom<Id<I::Token>> {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<T, I: OneShotIdentifier> PuiVecAccess<T, I> for RangeFrom<Id<I::Token>> {
     type Output = [T];
 
@@ -267,6 +276,7 @@ impl<T, I: OneShotIdentifier> PuiVecAccess<T, I> for RangeFrom<Id<I::Token>> {
 #[cfg(feature = "pui-core")]
 impl<T> Seal for RangeToInclusive<Id<T>> {}
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: OneShotIdentifier> PuiVecIndex<I> for RangeToInclusive<Id<I::Token>> {
     type SliceIndex = RangeToInclusive<usize>;
 
@@ -282,6 +292,7 @@ impl<I: OneShotIdentifier> PuiVecIndex<I> for RangeToInclusive<Id<I::Token>> {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: OneShotIdentifier> BuildPuiVecIndex<I> for RangeToInclusive<Id<I::Token>> {
     unsafe fn new_unchecked(slice_index: Self::SliceIndex, ident: &I) -> Self {
         ..=Id {
@@ -292,6 +303,7 @@ impl<I: OneShotIdentifier> BuildPuiVecIndex<I> for RangeToInclusive<Id<I::Token>
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<T, I: OneShotIdentifier> PuiVecAccess<T, I> for RangeToInclusive<Id<I::Token>> {
     type Output = [T];
 
@@ -307,6 +319,7 @@ impl<T, I: OneShotIdentifier> PuiVecAccess<T, I> for RangeToInclusive<Id<I::Toke
 #[cfg(feature = "pui-core")]
 impl<T> Seal for Range<Id<T>> {}
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: OneShotIdentifier> PuiVecIndex<I> for Range<Id<I::Token>> {
     type SliceIndex = Range<usize>;
 
@@ -322,6 +335,7 @@ impl<I: OneShotIdentifier> PuiVecIndex<I> for Range<Id<I::Token>> {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: OneShotIdentifier> BuildPuiVecIndex<I> for Range<Id<I::Token>> {
     unsafe fn new_unchecked(slice_index: Self::SliceIndex, ident: &I) -> Self {
         Id {
@@ -335,6 +349,7 @@ impl<I: OneShotIdentifier> BuildPuiVecIndex<I> for Range<Id<I::Token>> {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<T, I: OneShotIdentifier> PuiVecAccess<T, I> for Range<Id<I::Token>> {
     type Output = [T];
 
@@ -350,6 +365,7 @@ impl<T, I: OneShotIdentifier> PuiVecAccess<T, I> for Range<Id<I::Token>> {
 #[cfg(feature = "pui-core")]
 impl<T> Seal for RangeInclusive<Id<T>> {}
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: OneShotIdentifier> PuiVecIndex<I> for RangeInclusive<Id<I::Token>> {
     type SliceIndex = RangeInclusive<usize>;
 
@@ -365,6 +381,7 @@ impl<I: OneShotIdentifier> PuiVecIndex<I> for RangeInclusive<Id<I::Token>> {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: OneShotIdentifier> BuildPuiVecIndex<I> for RangeInclusive<Id<I::Token>> {
     unsafe fn new_unchecked(slice_index: Self::SliceIndex, ident: &I) -> Self {
         Id {
@@ -378,6 +395,7 @@ impl<I: OneShotIdentifier> BuildPuiVecIndex<I> for RangeInclusive<Id<I::Token>> 
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<T, I: OneShotIdentifier> PuiVecAccess<T, I> for RangeInclusive<Id<I::Token>> {
     type Output = [T];
 

@@ -55,6 +55,7 @@ impl<I, V: Version> ArenaAccess<I, V> for crate::TrustedIndex {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for pui_vec::Id<I::Token> {
     #[doc(hidden)]
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
@@ -65,6 +66,7 @@ impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for pui_vec::
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for pui_vec::Id<I::Token> {
     #[doc(hidden)]
     unsafe fn new_unchecked(index: usize, _: V::Save, ident: &I) -> Self {
@@ -91,6 +93,7 @@ impl<I, V: Version> BuildArenaKey<I, V> for Key<usize, V::Save> {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for Key<pui_vec::Id<I::Token>, V::Save> {
     #[doc(hidden)]
     fn contained_in<T>(&self, arena: &Arena<T, I, V>) -> bool {
@@ -106,6 +109,7 @@ impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for Key<pui_v
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for Key<pui_vec::Id<I::Token>, V::Save> {
     #[doc(hidden)]
     unsafe fn new_unchecked(index: usize, version: V::Save, ident: &I) -> Self {

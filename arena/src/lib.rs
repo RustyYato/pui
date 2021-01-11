@@ -1,6 +1,7 @@
 #![no_std]
 #![forbid(missing_docs)]
 #![deny(clippy::missing_safety_doc)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 // FIXME - the docs in this crate a *very* minimal, and need to be expanded upon
 
 //! A set of very efficient, and very customizable arenas that
@@ -21,14 +22,17 @@ pub mod base {
 
 /// scoped arenas
 #[cfg(feature = "scoped")]
+#[cfg_attr(docsrs, doc(cfg(feature = "scoped")))]
 pub mod scoped;
 /// a reimplementation of [`slab`](https://docs.rs/slab/) in terms
 /// of the generic arenas in [`base`]
 #[cfg(feature = "slab")]
+#[cfg_attr(docsrs, doc(cfg(feature = "slab")))]
 pub mod slab;
 /// a reimplementation of [`slotmap`](https://docs.rs/slotmap/) in terms
 /// of the generic arenas in [`base`]
 #[cfg(feature = "slotmap")]
+#[cfg_attr(docsrs, doc(cfg(feature = "slotmap")))]
 pub mod slotmap;
 
 #[doc(hidden)]
@@ -62,6 +66,7 @@ impl SetOnDrop<'_> {
 /// Create newtype of all the arenas in `base`
 #[macro_export]
 #[cfg(feature = "pui")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 macro_rules! newtype {
     (
         $(#[$meta:meta])*

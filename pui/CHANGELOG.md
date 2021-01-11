@@ -1,3 +1,9 @@
+# 0.5.1
+
+* Fixed `no_std` compatiblilty
+* Updated feature flags documentation
+* Added README
+
 # v 0.5.0
 
 * Extract the core into `pui-core`

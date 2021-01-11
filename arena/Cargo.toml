@@ -1,6 +1,6 @@
 [package]
 name = "pui-arena"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["RustyYato <krishna.sd.2012@gmail.com>"]
 edition = "2018"
 keywords = ["identifier", "unique", "arena"]
@@ -9,9 +9,14 @@ license = "MIT/Apache-2.0"
 repository = "https://github.com/RustyYato/pui"
 description = "Generalized Arenas that can be used on `no_std`"
 
+[package.metadata.docs.rs]
+features = ['pui', 'slotmap', 'slab', 'scoped']
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+
+default = ['pui']
 
 pui = ['pui-vec/pui', 'pui-core']
 slotmap = []
@@ -20,7 +25,7 @@ scoped = ['pui']
 
 [dependencies]
 pui-core = { path = '../core', version = '0.5.1', default-features = false, optional = true }
-pui-vec = { path = '../vec', version = '0.5' }
+pui-vec = { path = '../vec', version = '0.5', default-features = false }
 
 [dev-dependencies]
 criterion = "0.3"

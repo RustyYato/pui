@@ -141,18 +141,22 @@ cfg_if::cfg_if! {
         use std::collections::VecDeque;
 
         /// A thread safe stack-pool, it returns scalars in LIFO order
+        #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
         pub struct SyncStackPool<T: ScalarAllocator>(Mutex<Vec<crate::scalar::OpaqueScalar<T>>>);
 
         /// A thread safe queue-pool, it returns scalars in FIFO order
+        #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
         pub struct SyncQueuePool<T: ScalarAllocator>(once_cell::sync::Lazy<Mutex<VecDeque<crate::scalar::OpaqueScalar<T>>>>);
     } else if #[cfg(feature = "std")] {
         use std::sync::Mutex;
         use std::collections::VecDeque;
 
         /// A thread safe stack-pool, it returns scalars in LIFO order
+        #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
         pub struct SyncStackPool<T: ScalarAllocator>(once_cell::sync::Lazy<Mutex<Vec<crate::scalar::OpaqueScalar<T>>>>);
 
         /// A thread safe queue-pool, it returns scalars in FIFO order
+        #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
         pub struct SyncQueuePool<T: ScalarAllocator>(once_cell::sync::Lazy<Mutex<VecDeque<crate::scalar::OpaqueScalar<T>>>>);
     }
 }

@@ -36,6 +36,7 @@ crate::scalar_allocator! {
 }
 
 #[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 crate::scalar_allocator! {
     /// A thread-local scalar allocator that's backed by a [`NonZeroU64`]
     /// This allows `Option<DynamicToken<ThreadLocal>>` to be the same size

@@ -1,5 +1,6 @@
 #![no_std]
 #![forbid(missing_docs, clippy::missing_safety_doc)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! A append-only vector that uses `pui_core` to brand indicies
 //! to allow for unchecked indexing. (Note: `PuiVec` is only
@@ -17,6 +18,7 @@ use core::ops::{Deref, DerefMut, Index, IndexMut};
 use std::vec::Vec;
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 use pui_core::OneShotIdentifier;
 
 mod pui_vec_index;
@@ -25,6 +27,7 @@ pub use pui_vec_index::{BuildPuiVecIndex, PuiVecAccess, PuiVecIndex};
 
 /// A branded index that can be used to elide bounds checks
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Id<T> {
     index: usize,
@@ -44,6 +47,7 @@ impl<T, I> From<PuiVec<T, I>> for Vec<T> {
 }
 
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<T> Id<T> {
     /// Create a new branded index
     ///
@@ -150,6 +154,7 @@ impl<T, I> PuiVec<T, I> {
 
 // TODO - move `swap`, `split_at`, and `split_at_mut` out to be based on `PuiVecIndex`
 #[cfg(feature = "pui-core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
 impl<T, I: OneShotIdentifier> PuiVec<T, I> {
     /// Returns an iterator over all the ids in the `PuiVec`
     pub fn ids(&self) -> impl ExactSizeIterator<Item = Id<I::Token>> + Clone {
