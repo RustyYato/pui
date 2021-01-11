@@ -21,16 +21,16 @@ std = ['pui-core/std', 'alloc']
 alloc = ['pui-arena', 'pui-vec']
 
 [dependencies]
-pui-cell = { path = '../cell', version = '0.5' }
+pui-cell = { path = '../cell', version = '0.5.1' }
 
 [dependencies.pui-core]
 path = '../core'
-version = '0.5.1'
+version = '0.5.2'
 default-features = false
 
 [dependencies.pui-vec]
 path = '../vec'
-version = '0.5'
+version = '0.5.1'
 features = ['pui']
 default-features = false
 optional = true

@@ -1,6 +1,6 @@
 [package]
 name = "pui-cell"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["RustyYato <krishna.sd.2012@gmail.com>"]
 edition = "2018"
 keywords = ["identifier", "unique", "cell"]
@@ -12,5 +12,5 @@ description = "An append only vector, with guaranteed elided bounds checks"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-pui-core = { path = '../core', version = '0.5.1', default-features = false }
+pui-core = { path = '../core', version = '0.5.2', default-features = false }
 typsy = { git = 'https://github.com/RustyYato/typsy', version = '0.1', branch = 'main', default-features = false }
