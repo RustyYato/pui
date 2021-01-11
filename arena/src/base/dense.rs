@@ -91,8 +91,6 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// than or equal to self.len() + additional. Does nothing if capacity is
     /// already sufficient.
     pub fn reserve(&mut self, additional: usize) {
-        let len = self.values.len();
-
         self.values.reserve(additional);
         let mut keys = Vec::from(core::mem::take(&mut self.keys));
         keys.reserve(additional);
@@ -101,10 +99,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
             keys.set_len(cap);
         }
         self.keys = keys.into();
-
-        if let Some(additional) = (self.slots.capacity() - len).checked_sub(additional) {
-            self.slots.reserve(additional);
-        }
+        self.slots.reserve(additional);
     }
 
     #[cold]

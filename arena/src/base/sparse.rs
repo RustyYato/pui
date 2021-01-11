@@ -182,7 +182,11 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// frequent reallocations. After calling reserve, capacity will be greater
     /// than or equal to self.len() + additional. Does nothing if capacity is
     /// already sufficient.
-    pub fn reserve(&mut self, additional: usize) { self.slots.reserve(additional) }
+    pub fn reserve(&mut self, additional: usize) {
+        if let Some(additional) = self.capacity().wrapping_sub(self.num_elements).checked_sub(additional) {
+            self.slots.reserve(additional)
+        }
+    }
 
     /// Check if an index is in bounds, and if it is return a `Key<_, _>` to it
     #[inline]
