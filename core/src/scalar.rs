@@ -167,10 +167,13 @@ macro_rules! __scalar_allocator {
     };
     (@create type $name:ident) => {
         impl $name {
+            /// Create a `Dynamic<Self>` that implements `OneShotIdentifier`
             pub fn oneshot() -> $crate::dynamic::Dynamic<Self> { $crate::dynamic::Dynamic::with_alloc() }
 
+            /// Create a `Dynamic<Self, Self>` that implements `Identifier`
             pub fn reuse() -> $crate::dynamic::Dynamic<Self, Self> { Self::with_pool(Self) }
 
+            /// Create a `Dynamic<Self, P>` with the given pool
             pub fn with_pool<P: $crate::pool::PoolMut<Self>>(pool: P) -> $crate::dynamic::Dynamic<Self, P> {
                 $crate::dynamic::Dynamic::with_alloc_and_pool(pool)
             }

@@ -1,3 +1,22 @@
+//! A reimplementation of [`slab`](https://docs.rs/slab/) in terms
+//! of the generic arenas in [`base`](crate::base)
+//!
+//! The module structure here is identical to [`crate::base`], and
+//! you can look there for detailed documentation about the types.
+//! Each implementation of `Slab` will have all the methods from the
+//! corrosponding `Arena`, and those that take or produce generic keys
+//! will instead take/produce `usize` (which is type alised to `Key`).
+//!
+//! In each module, you'll find an `Slab` newtype (with one public field),
+//! a `VacantEntry` newtype (again with one public field). These are thin
+//! wrappers around their generic counterparts. Their only serve the purpose
+//! of making error messages easier to parse, and use a default `Key`.
+//! You will also find a vareity of type aliases for various iterators, and
+//! for the default `Key` type for ease of use.
+//!
+//! If you want to access the raw backing `Arena`/`VacantEntry`, you still can,
+//! it is the only public field of each slotmap/vacant entry.
+
 macro_rules! imp_slab {
     (
         new $($const:ident)?: $new:expr,
@@ -112,7 +131,7 @@ macro_rules! imp_slab {
 
 /// a dense slab
 ///
-/// see [base::dense](crate::base::dense) for details
+/// see [`base::dense`](crate::base::dense) for details
 pub mod dense {
     use core::ops::{Index, IndexMut};
 
@@ -145,7 +164,7 @@ pub mod dense {
 
 /// a hop slab
 ///
-/// see [base::hop](crate::base::hop) for details
+/// see [`base::hop`](crate::base::hop) for details
 pub mod hop {
     use core::ops::{Index, IndexMut};
 
@@ -178,7 +197,7 @@ pub mod hop {
 
 /// a sparse slab
 ///
-/// see [base::sparse](crate::base::sparse) for details
+/// see [`base::sparse`](crate::base::sparse) for details
 pub mod sparse {
     use core::ops::{Index, IndexMut};
 
