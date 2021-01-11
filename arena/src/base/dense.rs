@@ -32,18 +32,18 @@ use crate::{
 // This will save 1 word of space
 
 /// A dense arena
-#[derive(Clone)]
 pub struct Arena<T, I = (), V: Version = DefaultVersion> {
     slots: SparseArena<usize, I, V>,
     keys: Box<[MaybeUninit<usize>]>,
-    values: Vec<T>,
+    values: Box<[MaybeUninit<T>]>,
 }
 
 /// An empty slot in a dense arena
 pub struct VacantEntry<'a, T, K, V: Version = DefaultVersion> {
     slots: SparseVacantEntry<'a, usize, K, V>,
-    values: &'a mut Vec<T>,
+    value: &'a mut MaybeUninit<T>,
     keys: &'a mut MaybeUninit<usize>,
+    index: usize,
 }
 
 impl<T> Default for Arena<T> {
@@ -58,8 +58,9 @@ impl<T> Arena<T> {
 impl<T, V: Version> Arena<T, (), V> {
     /// Clear the arena without reducing it's capacity
     pub fn clear(&mut self) {
+        let len = self.slots.len();
         self.slots.clear();
-        self.values.clear();
+        unsafe { core::ptr::drop_in_place(self.values.get_unchecked_mut(..len) as *mut [MaybeUninit<T>] as *mut [T]) }
     }
 }
 
@@ -68,7 +69,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn with_ident(ident: I) -> Self {
         Self {
             slots: SparseArena::with_ident(ident),
-            values: Vec::new(),
+            values: Box::new([]),
             keys: Box::new([]),
         }
     }
@@ -77,13 +78,13 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn ident(&self) -> &I { self.slots.ident() }
 
     /// Returns true if the arena is empty
-    pub fn is_empty(&self) -> bool { self.values.is_empty() }
+    pub fn is_empty(&self) -> bool { self.slots.is_empty() }
 
     /// Returns the number of elements in this arena
-    pub fn len(&self) -> usize { self.values.len() }
+    pub fn len(&self) -> usize { self.slots.len() }
 
     /// Returns the capacity of this arena
-    pub fn capacity(&self) -> usize { self.values.capacity() }
+    pub fn capacity(&self) -> usize { self.values.len() }
 
     /// Reserves capacity for at least additional more elements to be inserted
     /// in the given Arena<T>. The collection may reserve more space to avoid
@@ -91,14 +92,29 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// than or equal to self.len() + additional. Does nothing if capacity is
     /// already sufficient.
     pub fn reserve(&mut self, additional: usize) {
-        self.values.reserve(additional);
-        let mut keys = Vec::from(core::mem::take(&mut self.keys));
-        keys.reserve(additional);
-        unsafe {
-            let cap = keys.capacity();
-            keys.set_len(cap);
+        fn reserve_box<T>(bx: &mut Box<[MaybeUninit<T>]>, additional: usize) {
+            let mut vec = Vec::from(core::mem::take(bx));
+            vec.reserve(additional);
+            unsafe {
+                let cap = vec.capacity();
+                vec.set_len(cap);
+            }
+            *bx = vec.into();
         }
-        self.keys = keys.into();
+
+        struct Abort;
+
+        impl Drop for Abort {
+            fn drop(&mut self) { panic!() }
+        }
+
+        let abort_on_panic = Abort;
+
+        reserve_box(&mut self.values, additional);
+        reserve_box(&mut self.keys, additional);
+
+        core::mem::forget(abort_on_panic);
+
         self.slots.reserve(additional);
     }
 
@@ -115,10 +131,8 @@ impl<'a, T, I, V: Version> VacantEntry<'a, T, I, V> {
     /// Insert an element into the vacant entry
     pub fn insert<K: BuildArenaKey<I, V>>(self, value: T) -> K {
         unsafe {
-            let index = self.values.len();
-            self.values.as_mut_ptr().add(index).write(value);
-            self.values.set_len(index + 1);
-            let key: K = self.slots.insert(index);
+            *self.value = MaybeUninit::new(value);
+            let key: K = self.slots.insert(self.index);
             *self.keys = MaybeUninit::new(key.index());
             key
         }
@@ -139,14 +153,15 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn vacant_entry(&mut self) -> VacantEntry<'_, T, I, V> {
         let len = self.len();
 
-        if len == self.keys.len() {
+        if len == self.slots.len() {
             self.reserve_cold(1);
         }
 
         VacantEntry {
             slots: self.slots.vacant_entry(),
-            values: &mut self.values,
+            value: unsafe { self.values.get_unchecked_mut(len) },
             keys: unsafe { self.keys.get_unchecked_mut(len) },
+            index: len,
         }
     }
 
@@ -184,26 +199,18 @@ impl<T, I, V: Version> Arena<T, I, V> {
     }
 
     fn remove_unchecked(&mut self, index: usize) -> T {
-        if self.values.is_empty() {
-            unsafe { core::hint::unreachable_unchecked() }
-        }
-
         if index == self.values.len().wrapping_sub(1) {
-            unsafe {
-                self.values.set_len(index);
-                return self.values.as_ptr().add(index).read()
-            }
+            unsafe { return self.values.get_unchecked(index).as_ptr().read() }
         }
 
         let value;
 
         unsafe {
             // remove element from vec
-            let last = self.values.len().wrapping_sub(1);
-            let ptr = self.values.as_mut_ptr();
+            let last = self.slots.len();
+            let ptr = self.values.as_mut_ptr().cast::<T>();
             value = ptr.add(index).read();
             ptr.add(index).copy_from_nonoverlapping(ptr.add(last), 1);
-            self.values.set_len(last);
 
             // remove back ref to slot
             let ptr = self.keys.as_mut_ptr();
@@ -258,15 +265,10 @@ impl<T, I, V: Version> Arena<T, I, V> {
             None => return false,
         };
 
-        if self.values.is_empty() {
-            unsafe { core::hint::unreachable_unchecked() }
-        }
-
         unsafe {
             // remove element from vec
-            let last = self.values.len().wrapping_sub(1);
-            self.values.set_len(last);
-            let ptr = self.values.as_mut_ptr();
+            let last = self.slots.len();
+            let ptr = self.values.as_mut_ptr().cast::<T>();
 
             let _fixup = if index == last {
                 None
@@ -291,7 +293,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// If the given key is not associated with a value, then None is returned.
     pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> {
         let &slot = self.slots.get(key)?;
-        unsafe { Some(self.values.get_unchecked(slot)) }
+        unsafe { Some(&*self.values.get_unchecked(slot).as_ptr()) }
     }
 
     /// Return a unique reference to the value associated with the given key.
@@ -299,7 +301,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// If the given key is not associated with a value, then None is returned.
     pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> {
         let &slot = self.slots.get(key)?;
-        unsafe { Some(self.values.get_unchecked_mut(slot)) }
+        unsafe { Some(&mut *self.values.get_unchecked_mut(slot).as_mut_ptr()) }
     }
 
     /// Return a shared reference to the value associated with the
@@ -311,7 +313,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// `contains` should return true with the given index.
     pub unsafe fn get_unchecked(&self, index: usize) -> &T {
         let &slot = self.slots.get_unchecked(index);
-        self.values.get_unchecked(slot)
+        &*self.values.get_unchecked(slot).as_ptr()
     }
 
     /// Return a unique reference to the value associated with the
@@ -323,13 +325,14 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// `contains` should return true with the given index.
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
         let &slot = self.slots.get_unchecked(index);
-        self.values.get_unchecked_mut(slot)
+        &mut *self.values.get_unchecked_mut(slot).as_mut_ptr()
     }
 
     /// Deletes all elements from the arena
     pub fn delete_all(&mut self) {
+        let len = self.slots.len();
         self.slots.delete_all();
-        self.values.clear();
+        unsafe { core::ptr::drop_in_place(self.values.get_unchecked_mut(..len) as *mut [MaybeUninit<T>] as *mut [T]) }
     }
 
     /// Retain only the elements specified by the predicate.
@@ -338,7 +341,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// then the element is kept in the arena.
     pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
         for i in (0..self.values.len()).rev() {
-            let value = unsafe { self.values.get_unchecked_mut(i) };
+            let value = unsafe { &mut *self.values.get_unchecked_mut(i).as_mut_ptr() };
 
             if !f(value) {
                 self.delete(unsafe { crate::TrustedIndex::new(i) });
@@ -353,11 +356,13 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     /// An iterator of shared references to values of the arena,
     /// in no particular order
-    pub fn iter(&self) -> core::slice::Iter<'_, T> { self.values.iter() }
+    pub fn iter(&self) -> core::slice::Iter<'_, T> { unsafe { iter(&self.values, self.slots.len()) } }
 
     /// An iterator of unique references to values of the arena,
     /// in no particular order
-    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> { self.values.iter_mut() }
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
+        unsafe { iter_mut(&mut self.values, self.slots.len()) }
+    }
 
     /// Return a draining iterator that removes all elements from the
     /// arena and yields the removed items.
@@ -393,8 +398,8 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// to the corrosponding value
     pub fn entries<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> Entries<'_, T, I, V, K> {
         Entries {
+            iter: unsafe { iter(&self.values, self.slots.len()) },
             keys: unsafe { keys(&self.keys, self.values.len(), &self.slots) },
-            iter: self.values.iter(),
         }
     }
 
@@ -403,8 +408,8 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// to the corrosponding value
     pub fn entries_mut<'a, K: 'a + BuildArenaKey<I, V>>(&'a mut self) -> EntriesMut<'_, T, I, V, K> {
         EntriesMut {
+            iter: unsafe { iter_mut(&mut self.values, self.slots.len()) },
             keys: unsafe { keys(&self.keys, self.values.len(), &self.slots) },
-            iter: self.values.iter_mut(),
         }
     }
 
@@ -413,10 +418,27 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// to the corrosponding value
     pub fn into_entries<K: BuildArenaKey<I, V>>(self) -> IntoEntries<T, I, V, K> {
         IntoEntries {
-            keys: unsafe { into_keys(self.keys, self.values.len(), self.slots) },
-            iter: self.values.into_iter(),
+            iter: unsafe { into_iter(self.values, self.slots.len()) },
+            keys: unsafe { into_keys(self.keys, self.slots.len(), self.slots) },
         }
     }
+}
+
+unsafe fn iter<T>(slice: &[MaybeUninit<T>], len: usize) -> core::slice::Iter<'_, T> {
+    let ptr = slice as *const [MaybeUninit<T>] as *const T;
+    core::slice::from_raw_parts(ptr, len).iter()
+}
+
+unsafe fn iter_mut<T>(slice: &mut [MaybeUninit<T>], len: usize) -> core::slice::IterMut<'_, T> {
+    let ptr = slice as *mut [MaybeUninit<T>] as *mut T;
+    core::slice::from_raw_parts_mut(ptr, len).iter_mut()
+}
+
+unsafe fn into_iter<T>(slice: Box<[MaybeUninit<T>]>, len: usize) -> std::vec::IntoIter<T> {
+    let cap = slice.len();
+    let ptr = Box::into_raw(slice) as *mut [MaybeUninit<T>] as *mut T;
+    let vec = Vec::from_raw_parts(ptr, len, cap);
+    vec.into_iter()
 }
 
 unsafe fn keys<'a, I, V: Version, K: BuildArenaKey<I, V>>(
@@ -455,7 +477,7 @@ impl<T, I, V: Version> IntoIterator for Arena<T, I, V> {
     type Item = T;
     type IntoIter = std::vec::IntoIter<T>;
 
-    fn into_iter(self) -> Self::IntoIter { self.values.into_iter() }
+    fn into_iter(self) -> Self::IntoIter { unsafe { into_iter(self.values, self.slots.len()) } }
 }
 
 impl<T, I, V: Version, K: ArenaAccess<I, V>> Index<K> for Arena<T, I, V> {
