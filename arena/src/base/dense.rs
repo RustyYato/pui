@@ -27,10 +27,6 @@ use crate::{
     ArenaAccess, BuildArenaKey,
 };
 
-// FIXME - a dense arena doesn't need to use `Vec<T>`, instead it can use
-// `Box<[MaybeUninit<T>]>`, because the length is tracked by `SparseArena`
-// This will save 1 word of space
-
 /// A dense arena
 pub struct Arena<T, I = (), V: Version = DefaultVersion> {
     slots: SparseArena<usize, I, V>,
@@ -53,6 +49,21 @@ impl<T> Default for Arena<T> {
 impl<T> Arena<T> {
     /// Create a new key from an id and version
     pub fn new() -> Self { Self::with_ident(()) }
+}
+
+impl<T: Clone, I: Clone, V: Version> Clone for Arena<T, I, V> {
+    fn clone(&self) -> Self {
+        let slots = self.slots.clone();
+        let keys = unsafe { self.keys.get_unchecked(..slots.len()) };
+        let keys = unsafe { &*(keys as *const [MaybeUninit<usize>] as *const [usize]) };
+        let keys = keys.to_vec().into_boxed_slice();
+        let keys = unsafe { Box::from_raw(Box::into_raw(keys) as *mut [MaybeUninit<usize>]) };
+        let values = unsafe { self.values.get_unchecked(..slots.len()) };
+        let values = unsafe { &*(values as *const [MaybeUninit<T>] as *const [T]) };
+        let values = values.to_vec().into_boxed_slice();
+        let values = unsafe { Box::from_raw(Box::into_raw(values) as *mut [MaybeUninit<T>]) };
+        Self { slots, keys, values }
+    }
 }
 
 impl<T, V: Version> Arena<T, (), V> {
@@ -130,12 +141,10 @@ impl<'a, T, I, V: Version> VacantEntry<'a, T, I, V> {
 
     /// Insert an element into the vacant entry
     pub fn insert<K: BuildArenaKey<I, V>>(self, value: T) -> K {
-        unsafe {
-            *self.value = MaybeUninit::new(value);
-            let key: K = self.slots.insert(self.index);
-            *self.keys = MaybeUninit::new(key.index());
-            key
-        }
+        *self.value = MaybeUninit::new(value);
+        let key: K = self.slots.insert(self.index);
+        *self.keys = MaybeUninit::new(key.index());
+        key
     }
 }
 
@@ -153,7 +162,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn vacant_entry(&mut self) -> VacantEntry<'_, T, I, V> {
         let len = self.len();
 
-        if len == self.slots.len() {
+        if len == self.values.len() {
             self.reserve_cold(1);
         }
 
@@ -199,7 +208,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     }
 
     fn remove_unchecked(&mut self, index: usize) -> T {
-        if index == self.values.len().wrapping_sub(1) {
+        if index == self.slots.len() {
             unsafe { return self.values.get_unchecked(index).as_ptr().read() }
         }
 
@@ -340,7 +349,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// If the predicate returns for a given element true,
     /// then the element is kept in the arena.
     pub fn retain<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
-        for i in (0..self.values.len()).rev() {
+        for i in (0..self.slots.len()).rev() {
             let value = unsafe { &mut *self.values.get_unchecked_mut(i).as_mut_ptr() };
 
             if !f(value) {
@@ -351,7 +360,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     /// An iterator over the keys of the arena, in no particular order
     pub fn keys<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> Keys<'_, I, V, K> {
-        unsafe { keys(&self.keys, self.values.len(), &self.slots) }
+        unsafe { keys(&self.keys, &self.slots) }
     }
 
     /// An iterator of shared references to values of the arena,
@@ -371,7 +380,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// consumed or not consumed at all.
     pub fn drain(&mut self) -> Drain<'_, T, I, V> {
         Drain {
-            range: 0..self.values.len(),
+            range: 0..self.slots.len(),
             arena: self,
         }
     }
@@ -386,7 +395,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// consumed or not consumed at all.
     pub fn drain_filter<F: FnMut(&mut T) -> bool>(&mut self, filter: F) -> DrainFilter<'_, T, I, V, F> {
         DrainFilter {
-            range: 0..self.values.len(),
+            range: 0..self.slots.len(),
             arena: self,
             filter,
             panicked: false,
@@ -399,7 +408,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn entries<'a, K: 'a + BuildArenaKey<I, V>>(&'a self) -> Entries<'_, T, I, V, K> {
         Entries {
             iter: unsafe { iter(&self.values, self.slots.len()) },
-            keys: unsafe { keys(&self.keys, self.values.len(), &self.slots) },
+            keys: unsafe { keys(&self.keys, &self.slots) },
         }
     }
 
@@ -409,7 +418,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn entries_mut<'a, K: 'a + BuildArenaKey<I, V>>(&'a mut self) -> EntriesMut<'_, T, I, V, K> {
         EntriesMut {
             iter: unsafe { iter_mut(&mut self.values, self.slots.len()) },
-            keys: unsafe { keys(&self.keys, self.values.len(), &self.slots) },
+            keys: unsafe { keys(&self.keys, &self.slots) },
         }
     }
 
@@ -419,7 +428,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn into_entries<K: BuildArenaKey<I, V>>(self) -> IntoEntries<T, I, V, K> {
         IntoEntries {
             iter: unsafe { into_iter(self.values, self.slots.len()) },
-            keys: unsafe { into_keys(self.keys, self.slots.len(), self.slots) },
+            keys: unsafe { into_keys(self.keys, self.slots) },
         }
     }
 }
@@ -443,9 +452,9 @@ unsafe fn into_iter<T>(slice: Box<[MaybeUninit<T>]>, len: usize) -> std::vec::In
 
 unsafe fn keys<'a, I, V: Version, K: BuildArenaKey<I, V>>(
     keys: &'a [MaybeUninit<usize>],
-    len: usize,
     slots: &'a SparseArena<usize, I, V>,
 ) -> Keys<'a, I, V, K> {
+    let len = slots.len();
     let keys = keys.get_unchecked(..len);
     let keys = core::slice::from_raw_parts(keys.as_ptr().cast::<usize>(), keys.len());
 
@@ -458,9 +467,9 @@ unsafe fn keys<'a, I, V: Version, K: BuildArenaKey<I, V>>(
 
 unsafe fn into_keys<I, V: Version, K: BuildArenaKey<I, V>>(
     keys: Box<[MaybeUninit<usize>]>,
-    len: usize,
     slots: SparseArena<usize, I, V>,
 ) -> IntoKeys<I, V, K> {
+    let len = slots.len();
     let mut keys = ManuallyDrop::new(keys);
     let cap = keys.len();
     let keys = keys.as_mut_ptr().cast::<usize>();
@@ -508,12 +517,16 @@ use std::fmt;
 impl<T: fmt::Debug, I: fmt::Debug, V: Version + fmt::Debug> fmt::Debug for Arena<T, I, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let keys = unsafe {
-            let keys = self.keys.get_unchecked(..self.values.len());
+            let keys = self.keys.get_unchecked(..self.slots.len());
             core::slice::from_raw_parts(keys.as_ptr().cast::<usize>(), keys.len())
+        };
+        let values = unsafe {
+            let values = self.values.get_unchecked(..self.slots.len());
+            core::slice::from_raw_parts(values.as_ptr().cast::<T>(), values.len())
         };
         f.debug_struct("Arena")
             .field("slots", &self.slots)
-            .field("values", &self.values)
+            .field("values", &values)
             .field("keys", &keys)
             .finish()
     }
@@ -653,7 +666,8 @@ impl<'a, T, I, V: Version, F: FnMut(&mut T) -> bool> Iterator for DrainFilter<'a
             let index = self.range.next()?;
             unsafe {
                 let panicked = crate::SetOnDrop(&mut self.panicked);
-                let do_filter = (self.filter)(self.arena.values.get_unchecked_mut(index));
+                let value = &mut *self.arena.values.get_unchecked_mut(index).as_mut_ptr();
+                let do_filter = (self.filter)(value);
                 panicked.defuse();
                 if do_filter {
                     let key = self.arena.keys.get_unchecked(index).as_ptr().read();
@@ -670,7 +684,8 @@ impl<T, I, V: Version, F: FnMut(&mut T) -> bool> DoubleEndedIterator for DrainFi
         loop {
             let index = self.range.next_back()?;
             unsafe {
-                if (self.filter)(self.arena.values.get_unchecked_mut(index)) {
+                let value = &mut *self.arena.values.get_unchecked_mut(index).as_mut_ptr();
+                if (self.filter)(value) {
                     let key = self.arena.keys.get_unchecked(index).as_ptr().read();
                     self.arena.slots.delete_unchecked(key);
                     return Some(self.arena.remove_unchecked(index))

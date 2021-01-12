@@ -21,7 +21,7 @@
 ///
 /// ``` should_panic
 /// use pui_arena::version::UnversionedFull;
-/// # use pui_arena::base::sparse::Key;
+/// # use pui_arena::Key;
 /// # let mut arena = pui_arena::base::sparse::Arena::<_, (), pui_arena::version::Unversioned>::INIT;
 /// // insert 0 at index 0, arena = [(version: Unversioned::Full, Some(0))]
 /// let a: Key<usize, UnversionedFull> = arena.insert(0);
