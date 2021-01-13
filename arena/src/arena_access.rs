@@ -65,7 +65,12 @@ pub trait ArenaAccess<I, V: Version> {
 
 /// A trait to create keys from an arena
 pub trait BuildArenaKey<I, V: Version>: ArenaAccess<I, V> {
-    #[doc(hidden)]
+    /// Create a new arena key given an index, version save, and identifier
+    ///
+    /// # Safety
+    ///
+    /// * `index` must be in bounds of the arena with the identifier `ident`
+    /// * `save` must be the latest save of slot at `index` in the arena
     unsafe fn new_unchecked(index: usize, save: V::Save, ident: &I) -> Self;
 }
 
