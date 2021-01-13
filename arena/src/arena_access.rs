@@ -12,7 +12,7 @@ pub struct Key<Id, V = crate::version::SavedDefaultVersion> {
 /// An index validator
 pub struct Validator<'a>(PhantomData<fn() -> *mut &'a ()>);
 /// A completed index validator
-pub struct CompleteValidator<'a>(Result<usize, usize>, Validator<'a>);
+pub struct CompleteValidator<'a>(bool, Validator<'a>);
 
 impl<Id, V> Key<Id, V> {
     /// Create a new key from an id and version
@@ -32,24 +32,29 @@ impl<'a> Validator<'a> {
     ///
     /// # Safety
     ///
-    /// This index must be index bounds for arena with the identifier `ident`
+    /// See `ArenaAccess::validate_ident`
     #[allow(unused_variables)]
-    pub unsafe fn with_index_unchecked<I>(self, index: usize, ident: &'a I) -> CompleteValidator<'a> {
-        CompleteValidator(Ok(index), self)
-    }
+    pub unsafe fn unchecked_index<I>(self, ident: &'a I) -> CompleteValidator<'a> { CompleteValidator(true, self) }
 
     /// complete this index validator with an index
-    pub fn with_index(self, index: usize) -> CompleteValidator<'a> { CompleteValidator(Err(index), self) }
+    pub fn checked_index(self) -> CompleteValidator<'a> { CompleteValidator(false, self) }
 }
 
 impl CompleteValidator<'_> {
-    pub(crate) fn into_inner(self) -> Result<usize, usize> { self.0 }
+    pub(crate) fn into_inner(self) -> bool { self.0 }
 }
 
 /// A trait to access elements of an `Arena`
 pub trait ArenaAccess<I, V: Version> {
-    /// TODO
-    fn validate_ident<'a>(&self, ident: &'a I, validator: Validator<'a>) -> CompleteValidator<'a>;
+    /// An optimization that allows you to construct an unchecked index into the `Arena`
+    ///
+    /// It is only safe to call [`Validator::unchecked_index`]
+    /// if the next call to `Self::index` is guarnteed to be in bounds
+    /// for the arena with the identifier `ident`
+    #[allow(unused_variables)]
+    fn validate_ident<'a>(&self, ident: &'a I, validator: Validator<'a>) -> CompleteValidator<'a> {
+        validator.checked_index()
+    }
 
     /// The index of this key
     fn index(&self) -> usize;
@@ -75,10 +80,6 @@ impl<K: ?Sized + ArenaAccess<I, V>, I, V: Version> ArenaAccess<I, V> for &K {
 }
 
 impl<I, V: Version> ArenaAccess<I, V> for usize {
-    fn validate_ident<'a>(&self, _: &'a I, validator: Validator<'a>) -> CompleteValidator<'a> {
-        validator.with_index(*self)
-    }
-
     fn index(&self) -> usize { *self }
 
     fn version(&self) -> Option<V::Save> { None }
@@ -91,7 +92,7 @@ impl<I, V: Version> BuildArenaKey<I, V> for usize {
 
 impl<I, V: Version> ArenaAccess<I, V> for crate::TrustedIndex {
     fn validate_ident<'a>(&self, ident: &'a I, validator: Validator<'a>) -> CompleteValidator<'a> {
-        unsafe { validator.with_index_unchecked(self.0, ident) }
+        unsafe { validator.unchecked_index(ident) }
     }
 
     fn index(&self) -> usize { self.0 }
@@ -104,9 +105,9 @@ impl<I, V: Version> ArenaAccess<I, V> for crate::TrustedIndex {
 impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for pui_vec::Id<I::Token> {
     fn validate_ident<'a>(&self, ident: &'a I, validator: Validator<'a>) -> CompleteValidator<'a> {
         if ident.owns_token(self.token()) {
-            unsafe { validator.with_index_unchecked(self.get(), ident) }
+            unsafe { validator.unchecked_index(ident) }
         } else {
-            validator.with_index(self.get())
+            validator.checked_index()
         }
     }
 
@@ -125,10 +126,6 @@ impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for pui_vec
 }
 
 impl<I, V: Version> ArenaAccess<I, V> for Key<usize, V::Save> {
-    fn validate_ident<'a>(&self, _: &'a I, validator: Validator<'a>) -> CompleteValidator<'a> {
-        validator.with_index(self.id)
-    }
-
     fn index(&self) -> usize { self.id }
 
     fn version(&self) -> Option<V::Save> { Some(self.version) }
@@ -144,9 +141,9 @@ impl<I, V: Version> BuildArenaKey<I, V> for Key<usize, V::Save> {
 impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for Key<pui_vec::Id<I::Token>, V::Save> {
     fn validate_ident<'a>(&self, ident: &'a I, validator: Validator<'a>) -> CompleteValidator<'a> {
         if ident.owns_token(self.id().token()) {
-            unsafe { validator.with_index_unchecked(self.id.get(), ident) }
+            unsafe { validator.unchecked_index(ident) }
         } else {
-            validator.with_index(self.id.get())
+            validator.checked_index()
         }
     }
 
@@ -169,7 +166,7 @@ impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for Key<pui
 
 impl<I, V: Version> ArenaAccess<I, V> for Key<crate::TrustedIndex, V::Save> {
     fn validate_ident<'a>(&self, ident: &'a I, validator: Validator<'a>) -> CompleteValidator<'a> {
-        unsafe { validator.with_index_unchecked(self.id.0, ident) }
+        unsafe { validator.unchecked_index(ident) }
     }
 
     fn index(&self) -> usize { self.id.0 }

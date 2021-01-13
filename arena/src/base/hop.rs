@@ -130,10 +130,11 @@ impl<T, I, V: Version> Arena<T, I, V> {
 
     /// Return true if a value is associated with the given key.
     pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool {
-        let index = match key.validate_ident(self.ident(), crate::Validator::new()).into_inner() {
-            Err(index) if self.slots.len() <= index => return false,
-            Ok(index) | Err(index) => index,
-        };
+        let is_index_guarnateed_valid = key.validate_ident(self.ident(), crate::Validator::new()).into_inner();
+        let index = key.index();
+        if !is_index_guarnateed_valid && self.slots.len() <= index {
+            return false
+        }
 
         let version = unsafe { self.slots.get_unchecked(index).version() };
 
