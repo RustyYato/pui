@@ -21,6 +21,10 @@
 //! If you want to access the raw backing `Arena`/`VacantEntry`, you still can,
 //! it is the only public field of each scoped arena/vacant entry.
 
+use core::borrow::{Borrow, BorrowMut};
+
+use crate::{version::Version, ArenaAccess, BuildArenaKey, CompleteValidator, Validator};
+
 macro_rules! imp_scoped {
     (
         @forward
@@ -29,7 +33,7 @@ macro_rules! imp_scoped {
         ($($version:ident)?)
     ) => {
         /// The key for [`ScopedArena`]
-        pub type Key<'scope, V = crate::version::DefaultVersion> = $crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, <V as crate::version::Version>::Save>;
+        pub type Key<'scope, V = crate::version::DefaultVersion> = super::ScopedKey<'scope, <V as crate::version::Version>::Save>;
 
         /// The backing arena type
         pub type BaseArena<'scope, T, V = crate::version::DefaultVersion> = imp::Arena<T, pui_core::scoped::Scoped<'scope>, V>;
@@ -228,3 +232,70 @@ macro_rules! imp_scoped {
 }
 
 imp_scoped! { @build_module }
+
+/// A key into scoped arenas
+///
+/// This type only exists to make error messages easier to parse
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+pub struct ScopedKey<'scope, V>(pub crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V>);
+
+impl<'scope, V> From<crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V>> for ScopedKey<'scope, V> {
+    fn from(key: crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V>) -> Self { Self(key) }
+}
+
+impl<'scope, V> From<ScopedKey<'scope, V>> for crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V> {
+    fn from(ScopedKey(key): ScopedKey<'scope, V>) -> Self { key }
+}
+
+impl<'scope, V> Borrow<crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V>> for ScopedKey<'scope, V> {
+    fn borrow(&self) -> &crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V> { &self.0 }
+}
+
+impl<'scope, V> Borrow<ScopedKey<'scope, V>> for crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V> {
+    fn borrow(&self) -> &ScopedKey<'scope, V> { unsafe { core::mem::transmute(self) } }
+}
+
+impl<'scope, V> BorrowMut<crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V>> for ScopedKey<'scope, V> {
+    fn borrow_mut(&mut self) -> &mut crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V> { &mut self.0 }
+}
+
+impl<'scope, V> BorrowMut<ScopedKey<'scope, V>> for crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V> {
+    fn borrow_mut(&mut self) -> &mut ScopedKey<'scope, V> { unsafe { core::mem::transmute(self) } }
+}
+
+impl<'scope, V> AsRef<crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V>> for ScopedKey<'scope, V> {
+    fn as_ref(&self) -> &crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V> { &self.0 }
+}
+
+impl<'scope, V> AsRef<ScopedKey<'scope, V>> for crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V> {
+    fn as_ref(&self) -> &ScopedKey<'scope, V> { unsafe { core::mem::transmute(self) } }
+}
+
+impl<'scope, V> AsMut<crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V>> for ScopedKey<'scope, V> {
+    fn as_mut(&mut self) -> &mut crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V> { &mut self.0 }
+}
+
+impl<'scope, V> AsMut<ScopedKey<'scope, V>> for crate::Key<pui_vec::Id<pui_core::scoped::ScopedToken<'scope>>, V> {
+    fn as_mut(&mut self) -> &mut ScopedKey<'scope, V> { unsafe { core::mem::transmute(self) } }
+}
+
+impl<'scope, V: Version> ArenaAccess<pui_core::scoped::Scoped<'scope>, V> for ScopedKey<'scope, V::Save> {
+    fn validate_ident<'a>(
+        &self,
+        ident: &'a pui_core::scoped::Scoped<'scope>,
+        validator: Validator<'a>,
+    ) -> CompleteValidator<'a> {
+        ArenaAccess::<pui_core::scoped::Scoped<'scope>, V>::validate_ident(&self.0, ident, validator)
+    }
+    fn index(&self) -> usize { ArenaAccess::<pui_core::scoped::Scoped<'scope>, V>::index(&self.0) }
+    fn version(&self) -> Option<V::Save> { ArenaAccess::<pui_core::scoped::Scoped<'scope>, V>::version(&self.0) }
+}
+
+impl<'scope, V: Version> BuildArenaKey<pui_core::scoped::Scoped<'scope>, V> for ScopedKey<'scope, V::Save> {
+    unsafe fn new_unchecked(index: usize, save: V::Save, ident: &pui_core::scoped::Scoped<'scope>) -> Self {
+        Self(BuildArenaKey::<pui_core::scoped::Scoped<'scope>, V>::new_unchecked(
+            index, save, ident,
+        ))
+    }
+}

@@ -2,14 +2,176 @@
 #![forbid(missing_docs)]
 #![deny(clippy::missing_safety_doc)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![allow(clippy::transmute_ptr_to_ptr)]
 // FIXME - the docs in this crate a *very* minimal, and need to be expanded upon
 
 //! A set of very efficient, and very customizable arenas that
 //! can elide bounds checks wherever possible.
 //!
-//! This crate is heavily inspired by crates like [`slotmap`](crates.io/crate/slotmap)
-//! and [`slab`](crates.io/crate/slab).
+//! This crate is heavily inspired by crates like [`slotmap`](https://crates.io/crate/slotmap)
+//! and [`slab`](https://crates.io/crate/slab).
 //!
+//! `pui-arena` provides a set of collections that allow you to insert and delete
+//! items in at least amortized `O(1)`, access elements in `O(1)`. It also provides
+//! the tools required to avoid the [`ABA` problem](https://en.wikipedia.org/wiki/ABA_problem).
+//!
+//! You can think of the collections in `pui-arena` as a `HashMap`/`BTreeMap` where
+//! the arena manages the keys, and provides a very efficient way to access elements.
+//!
+//! # Why use `pui-arena` over alternatives
+//!
+//! `pui-arena` allows you to minimize overhead wherever possible, and fully customize
+//! the arenas. This allows you to use an api like `slab` or `slotmap` based on how
+//! you use the api. (There are also newtypes featured-gated by the features `slab`
+//! and `slotmap` that implement a similar interface to those two crates).
+//!
+//! If you use the `pui`/`scoped` feature, then you can also eliminate bounds checks
+//! entirely, which can be a huge performance save in performance sensitive regions.
+//!
+//! `pui-arena` also provides a more features than competitors, such as a vacant entry
+//! api for versioned arenas, and `drain_filter` for all arenas.
+//!
+//! # Choosing [`sparse`](base::sparse), [`hop`](base::hop), or [`dense`](base::dense)
+//!
+//! * If you want fast insertion/deletion/acccess and don't care about iteration speed,
+//! use [`sparse`](base::sparse).
+//!
+//! * If you want fast iteration speed above all else, use [`dense`](base::dense)
+//!
+//! * If you want reasonable iteration speed and also fast access/delete, or if [`dense`](base::dense)
+//! is to memory heavy, use [`hop`](base::hop)
+//!
+//! You can read about the details of how each works in the corrosponding module docs
+//!
+//! # Performance characteristics
+//!
+//! ## Speed
+//!
+//! all of the collections in `pui-arena` allow you to
+//! * insert elements in amortized `O(1)`
+//! * delete/access elements in `O(1)`
+//! * guarantee that keys *never* get invalidated unless `remove` is called
+//!
+//! ## Memory
+//!
+//! For each `Arena<T, _, V>` where `V: Version`, the memory overhead is as follows:
+//! * [`sparse`](base::sparse) [`Arena`](base::sparse::Arena) -
+//!     `size_of(V) + max(size_of(T), size_of(usize))` per slot
+//! * [`hop`](base::hop) [`Arena`](base::hop::Arena) -
+//!     `size_of(V) + max(size_of(T), 3 * size_of(usize))` per slot
+//! * [`dense`](base::dense) [`Arena`](base::dense::Arena) -
+//!     `size_of(V) + size_of(usize)` per slot,
+//!     and `size_of(usize) + size_of(T)` per value
+//!
+//! ## Implementation Details
+//!
+//! The core of this crate is the the [`Version`](version::Version) trait,
+//! the [`ArenaAccess`](ArenaAccess) trait, and the [`BuildArenaKey`](BuildArenaKey) trait.
+//!
+//! `Version` specifies the behavior of the arenas.
+//! `pui-arena` provides three implementations,
+//! see [`Version`](version::Version) for more details:
+//!
+//! * [`DefaultVersion`](version::DefaultVersion)
+//!     * Ensures that all keys produced by `insert` are unique
+//!     * backed by a `u32`, so it may waste space for small values
+//!         * technically if items are inserted/removed many times,
+//!             slots will be "leaked", and iteraton performance may degrade
+//!             but, this is unlikely, unless the same slot is reused over
+//!             2 billion times
+//! * [`TinyVersion`](version::TinyVersion) -
+//!     * Ensures that all keys produced by `insert` are unique
+//!     * backed by a `u8`, if items are inserted/removed many times,
+//!         slots will be "leaked", and iteraton performance may degrade
+//! * [`Unversioned`](version::Unversioned) -
+//!     * Keys produced by `insert` are not guartneed to be unique
+//!     * slots will never be "leaked"
+//!
+//! [`ArenaAccess`] specifies the behavior of keys into arenas.
+//! `pui-arena` provides a number of implementations. See [`ArenaAccess`]
+//! for details.
+//!
+//! * [`usize`] - allows accessing a given slot directly, with no regard for it's version
+//!     * Note: when I say "with no regard for it's version", it still checks the version
+//!         to see if the slot is occupied, but it has no means of checking if a slot
+//!         a value was re-inserted into the same slot
+//! * [`Key<K, _>`](Key) - allows accessing a slot specified by `K`, and checks the generation
+//!     of the slot before providing a value.
+//!     * `K` can be one of the other keys listed here (except for `ScopedKey`)
+//! * [`TrustedIndex`] - allows accessing a given slot directly, with no regard for it's version
+//!     * elides bounds checks, but is unsafe to construct
+//!     * This one should be used with care, if at all. It is better to use the `pui` feature
+//!         and use `pui_vec::Id` instead. It is safe, and also guartnees bound check elision
+//! * [`ScopedKey<'_, _>`](scoped::ScopedKey) - only allows access into scoped arenas
+//!     (otherwise identical to `Key`)
+//!
+//! enabled with the `pui` feature
+//!
+//! * [`pui_vec::Id`] - allows accessing a given slot directly, with no regard for it's version
+//!     * elides bounds checks
+//!
+//! [`BuildArenaKey`] specifies how arenas should create keys, all implementors of [`ArenaAccess`]
+//! provided by this crate also implement [`BuildArenaKey`] except for [`TrustedIndex`].
+//!
+//! # Custom arenas
+//!
+//! You can newtype arenas with the [`newtype`] macro, or the features: `slab`, `slotmap`, or `scoped`.
+//!
+//! * [`slab`] - provides a similar api to the [`slab` crate](https://crates.io/crate/slab)
+//!     * uses `usize` keys, and [`Unversioned`](version::Unversioned) slots
+//! * [`slotmap`] - provides a similar api to the [`slab` crate](https://crates.io/crate/slotmap)
+//!     * uses [`Key<usize>`](Key) keys, and [`DefaultVersion`](version::DefaultVersion) slots
+//! * [`scoped`] - provides newtyped arenas that use `pui_core::scoped` to elide bounds checks
+//!     * uses [`scoped::ScopedKey<'_, _>`](scoped::ScopedKey) keys,
+//!     and is generic over the version
+//! * [`newtype`] - creates a set of newtyped arenas with the module structure of `base`
+//!     * These arenas elide bounds checks, in favor of id checks, which are cheaper,
+//!     and depending on your backing id, can be no check at all!
+//!     (see [`pui_core::scalar_allocator`] details)
+//!
+//! ```
+//! // Because the backing id type is `()`, there are no bounds checks when using
+//! // this arena!
+//! pui_arena::newtype! {
+//!     struct MyCustomArena;
+//! }
+//!
+//! let my_sparse_arena = sparse::Arena::new();
+//! let my_dense_arena = dense::Arena::new();
+//! let my_hop_arena = hop::Arena::new();
+//! ```
+//!
+//! Becomes something like
+//!
+//! ```ignore
+//! pui_core::scalar_allocator! {
+//!     struct MyCustomArena;
+//! }
+//!
+//! mod sparse {
+//!     pub(super) Arena(pub(super) pui_arena::base::sparse::Arena<...>);
+//!
+//!     /// more type aliases here
+//! }
+//!
+//! mod dense {
+//!     pub(super) Arena(pub(super) pui_arena::base::dense::Arena<...>);
+//!
+//!     /// more type aliases here
+//! }
+//!
+//! mod hop {
+//!     pub(super) Arena(pub(super) pui_arena::base::hop::Arena<...>);
+//!
+//!     /// more type aliases here
+//! }
+//!
+//! let my_sparse_arena = sparse::Arena::new();
+//! let my_dense_arena = dense::Arena::new();
+//! let my_hop_arena = hop::Arena::new();
+//! ```
+//!
+//! Where each `Arena` newtype has a simplified api, and better error messages.
 
 #[doc(hidden)]
 pub extern crate alloc as std;

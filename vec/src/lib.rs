@@ -28,7 +28,7 @@ pub use pui_vec_index::{BuildPuiVecIndex, PuiVecAccess, PuiVecIndex};
 /// A branded index that can be used to elide bounds checks
 #[cfg(feature = "pui-core")]
 #[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Id<T> {
     index: usize,
     token: T,

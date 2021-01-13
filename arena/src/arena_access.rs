@@ -46,7 +46,7 @@ impl CompleteValidator<'_> {
     pub(crate) fn into_inner(self) -> Result<usize, usize> { self.0 }
 }
 
-/// A trait to access elements of a sparse [`Arena`]
+/// A trait to access elements of an `Arena`
 pub trait ArenaAccess<I, V: Version> {
     /// TODO
     fn validate_ident<'a>(&self, ident: &'a I, validator: Validator<'a>) -> CompleteValidator<'a>;
