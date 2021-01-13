@@ -98,6 +98,21 @@ impl<T> BoxVec<T> {
         }
     }
 
+    pub fn reserve_exact(&mut self, len: usize, additional: usize) {
+        let cap = self.inner.len();
+        let ptr = self.inner.as_mut_ptr();
+
+        let mut vec = ManuallyDrop::new(unsafe { Vec::from_raw_parts(ptr, len, cap) });
+        vec.reserve_exact(additional);
+        unsafe {
+            let bx = Box::from_raw(core::ptr::slice_from_raw_parts_mut(
+                vec.as_mut_ptr().cast(),
+                vec.capacity(),
+            ));
+            core::ptr::write(&mut self.inner, bx);
+        }
+    }
+
     pub fn clone(&self, len: usize) -> Self
     where
         T: Clone,
@@ -181,11 +196,14 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// Returns the capacity of this arena
     pub fn capacity(&self) -> usize { self.values.capacity().min(self.keys.capacity()) }
 
-    /// Reserves capacity for at least additional more elements to be inserted
-    /// in the given Arena<T>. The collection may reserve more space to avoid
-    /// frequent reallocations. After calling reserve, capacity will be greater
-    /// than or equal to self.len() + additional. Does nothing if capacity is
-    /// already sufficient.
+    /// Reserves the minimum capacity for exactly additional more elements
+    /// to be inserted in the given collection. After calling reserve_exact,
+    /// capacity will be greater than or equal to `self.len() + additional`.
+    /// Does nothing if the capacity is already sufficient.
+    ///
+    /// Note that the allocator may give the collection more space than it
+    /// requests. Therefore, capacity can not be relied upon to be precisely
+    /// minimal. Prefer reserve if future insertions are expected.
     pub fn reserve(&mut self, additional: usize) {
         struct Abort;
 
@@ -202,6 +220,32 @@ impl<T, I, V: Version> Arena<T, I, V> {
         core::mem::forget(abort_on_panic);
 
         self.slots.reserve(additional);
+    }
+
+    /// Reserves the minimum capacity for exactly additional more elements
+    /// to be inserted in the given collection. After calling reserve_exact,
+    /// capacity will be greater than or equal to `self.len() + additional`.
+    /// Does nothing if the capacity is already sufficient.
+    ///
+    /// Note that the allocator may give the collection more space than it
+    /// requests. Therefore, capacity can not be relied upon to be precisely
+    /// minimal. Prefer reserve if future insertions are expected.
+    pub fn reserve_exact(&mut self, additional: usize) {
+        struct Abort;
+
+        impl Drop for Abort {
+            fn drop(&mut self) { panic!() }
+        }
+
+        let abort_on_panic = Abort;
+
+        let len = self.slots.len();
+        self.values.reserve_exact(len, additional);
+        self.keys.reserve_exact(len, additional);
+
+        core::mem::forget(abort_on_panic);
+
+        self.slots.reserve_exact(additional);
     }
 
     #[cold]

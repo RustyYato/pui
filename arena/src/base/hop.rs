@@ -83,11 +83,29 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn capacity(&self) -> usize { self.slots.capacity() }
 
     /// Reserves capacity for at least additional more elements to be inserted
-    /// in the given Arena<T>. The collection may reserve more space to avoid
+    /// in the given collection. The collection may reserve more space to avoid
     /// frequent reallocations. After calling reserve, capacity will be greater
-    /// than or equal to self.len() + additional. Does nothing if capacity is
+    /// than or equal to `self.len() + additional`. Does nothing if capacity is
     /// already sufficient.
-    pub fn reserve(&mut self, additional: usize) { self.slots.reserve(additional) }
+    pub fn reserve(&mut self, additional: usize) {
+        if let Some(additional) = self.capacity().wrapping_sub(self.num_elements).checked_sub(additional) {
+            self.slots.reserve(additional)
+        }
+    }
+
+    /// Reserves the minimum capacity for exactly additional more elements
+    /// to be inserted in the given collection. After calling reserve_exact,
+    /// capacity will be greater than or equal to `self.len() + additional`.
+    /// Does nothing if the capacity is already sufficient.
+    ///
+    /// Note that the allocator may give the collection more space than it
+    /// requests. Therefore, capacity can not be relied upon to be precisely
+    /// minimal. Prefer reserve if future insertions are expected.
+    pub fn reserve_exact(&mut self, additional: usize) {
+        if let Some(additional) = self.capacity().wrapping_sub(self.num_elements).checked_sub(additional) {
+            self.slots.reserve_exact(additional)
+        }
+    }
 
     /// Check if an index is in bounds, and if it is return a `Key<_, _>` to it
     #[inline]

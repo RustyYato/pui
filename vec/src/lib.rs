@@ -86,9 +86,22 @@ impl<T, I> PuiVec<T, I> {
     /// Returns the capacity of this `PuiVec`
     pub fn capacity(&self) -> usize { self.vec.capacity() }
 
-    /// Reserves at least additional more elements in the `PuiVec`.
-    /// i.e. `additional` more elements can be pushed without causing a reallocation
+    /// Reserves capacity for at least additional more elements to be inserted
+    /// in the given collection. The collection may reserve more space to avoid
+    /// frequent reallocations. After calling reserve, capacity will be greater
+    /// than or equal to `self.len() + additional`. Does nothing if capacity is
+    /// already sufficient.
     pub fn reserve(&mut self, additional: usize) { self.vec.reserve(additional) }
+
+    /// Reserves the minimum capacity for exactly additional more elements
+    /// to be inserted in the given collection. After calling reserve_exact,
+    /// capacity will be greater than or equal to `self.len() + additional`.
+    /// Does nothing if the capacity is already sufficient.
+    ///
+    /// Note that the allocator may give the collection more space than it
+    /// requests. Therefore, capacity can not be relied upon to be precisely
+    /// minimal. Prefer reserve if future insertions are expected.
+    pub fn reserve_exact(&mut self, additional: usize) { self.vec.reserve_exact(additional) }
 
     /// Returns a reference to an element or subslice depending on the type of index.
     ///
