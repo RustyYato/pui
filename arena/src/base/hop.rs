@@ -28,7 +28,7 @@ use core::{
 
 use pui_vec::PuiVec;
 
-use crate::{version::Version, ArenaAccess, BuildArenaKey};
+use crate::{version::Version, ArenaKey, BuildArenaKey};
 
 mod imp;
 use imp::Slot;
@@ -129,7 +129,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     pub fn insert<K: BuildArenaKey<I, V>>(&mut self, value: T) -> K { self.vacant_entry().insert(value) }
 
     /// Return true if a value is associated with the given key.
-    pub fn contains<K: ArenaAccess<I, V>>(&self, key: K) -> bool {
+    pub fn contains<K: ArenaKey<I, V>>(&self, key: K) -> bool {
         let is_index_guarnateed_valid = key.validate_ident(self.ident(), crate::Validator::new()).into_inner();
         let index = key.index();
         if !is_index_guarnateed_valid && self.slots.len() <= index {
@@ -151,7 +151,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     ///
     /// Panics if key is not associated with a value.
     #[track_caller]
-    pub fn remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> T {
+    pub fn remove<K: ArenaKey<I, V>>(&mut self, key: K) -> T {
         self.try_remove(key)
             .expect("Could not remove from an `Arena` using a stale `Key`")
     }
@@ -162,7 +162,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// if the versioning strategy allows it.
     ///
     /// Returns `None` if key is not associated with a value.
-    pub fn try_remove<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<T> {
+    pub fn try_remove<K: ArenaKey<I, V>>(&mut self, key: K) -> Option<T> {
         if self.contains(&key) {
             Some(unsafe { self.remove_unchecked(key.index()) })
         } else {
@@ -176,7 +176,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// if the versioning strategy allows it.
     ///
     /// Returns true if the value was removed, an false otherwise
-    pub fn delete<K: ArenaAccess<I, V>>(&mut self, key: K) -> bool {
+    pub fn delete<K: ArenaKey<I, V>>(&mut self, key: K) -> bool {
         if self.contains(&key) {
             unsafe { self.delete_unchecked(key.index()) }
             true
@@ -188,7 +188,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// Return a shared reference to the value associated with the given key.
     ///
     /// If the given key is not associated with a value, then None is returned.
-    pub fn get<K: ArenaAccess<I, V>>(&self, key: K) -> Option<&T> {
+    pub fn get<K: ArenaKey<I, V>>(&self, key: K) -> Option<&T> {
         if self.contains(&key) {
             unsafe { Some(self.get_unchecked(key.index())) }
         } else {
@@ -199,7 +199,7 @@ impl<T, I, V: Version> Arena<T, I, V> {
     /// Return a unique reference to the value associated with the given key.
     ///
     /// If the given key is not associated with a value, then None is returned.
-    pub fn get_mut<K: ArenaAccess<I, V>>(&mut self, key: K) -> Option<&mut T> {
+    pub fn get_mut<K: ArenaKey<I, V>>(&mut self, key: K) -> Option<&mut T> {
         if self.contains(&key) {
             unsafe { Some(self.get_unchecked_mut(key.index())) }
         } else {
@@ -374,14 +374,14 @@ impl<T, I, V: Version> IntoIterator for Arena<T, I, V> {
     }
 }
 
-impl<T, I, V: Version, K: ArenaAccess<I, V>> Index<K> for Arena<T, I, V> {
+impl<T, I, V: Version, K: ArenaKey<I, V>> Index<K> for Arena<T, I, V> {
     type Output = T;
 
     #[track_caller]
     fn index(&self, key: K) -> &Self::Output { self.get(key).expect("Tried to access `Arena` with a stale `Key`") }
 }
 
-impl<T, I, V: Version, K: ArenaAccess<I, V>> IndexMut<K> for Arena<T, I, V> {
+impl<T, I, V: Version, K: ArenaKey<I, V>> IndexMut<K> for Arena<T, I, V> {
     #[track_caller]
     fn index_mut(&mut self, key: K) -> &mut Self::Output {
         self.get_mut(key).expect("Tried to access `Arena` with a stale `Key`")

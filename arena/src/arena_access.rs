@@ -32,7 +32,7 @@ impl<'a> Validator<'a> {
     ///
     /// # Safety
     ///
-    /// See `ArenaAccess::validate_ident`
+    /// See `ArenaKey::validate_ident`
     #[allow(unused_variables)]
     pub unsafe fn unchecked_index<I>(self, ident: &'a I) -> CompleteValidator<'a> { CompleteValidator(true, self) }
 
@@ -45,7 +45,7 @@ impl CompleteValidator<'_> {
 }
 
 /// A trait to access elements of an `Arena`
-pub trait ArenaAccess<I, V: Version> {
+pub trait ArenaKey<I, V: Version> {
     /// An optimization that allows you to construct an unchecked index into the `Arena`
     ///
     /// It is only safe to call [`Validator::unchecked_index`]
@@ -64,7 +64,7 @@ pub trait ArenaAccess<I, V: Version> {
 }
 
 /// A trait to create keys from an arena
-pub trait BuildArenaKey<I, V: Version>: ArenaAccess<I, V> {
+pub trait BuildArenaKey<I, V: Version>: ArenaKey<I, V> {
     /// Create a new arena key given an index, version save, and identifier
     ///
     /// # Safety
@@ -74,7 +74,7 @@ pub trait BuildArenaKey<I, V: Version>: ArenaAccess<I, V> {
     unsafe fn new_unchecked(index: usize, save: V::Save, ident: &I) -> Self;
 }
 
-impl<K: ?Sized + ArenaAccess<I, V>, I, V: Version> ArenaAccess<I, V> for &K {
+impl<K: ?Sized + ArenaKey<I, V>, I, V: Version> ArenaKey<I, V> for &K {
     fn validate_ident<'a>(&self, ident: &'a I, validator: Validator<'a>) -> CompleteValidator<'a> {
         K::validate_ident(self, ident, validator)
     }
@@ -84,7 +84,7 @@ impl<K: ?Sized + ArenaAccess<I, V>, I, V: Version> ArenaAccess<I, V> for &K {
     fn version(&self) -> Option<V::Save> { K::version(self) }
 }
 
-impl<I, V: Version> ArenaAccess<I, V> for usize {
+impl<I, V: Version> ArenaKey<I, V> for usize {
     fn index(&self) -> usize { *self }
 
     fn version(&self) -> Option<V::Save> { None }
@@ -95,7 +95,7 @@ impl<I, V: Version> BuildArenaKey<I, V> for usize {
     unsafe fn new_unchecked(index: usize, _: V::Save, _: &I) -> Self { index }
 }
 
-impl<I, V: Version> ArenaAccess<I, V> for crate::TrustedIndex {
+impl<I, V: Version> ArenaKey<I, V> for crate::TrustedIndex {
     fn validate_ident<'a>(&self, ident: &'a I, validator: Validator<'a>) -> CompleteValidator<'a> {
         unsafe { validator.unchecked_index(ident) }
     }
@@ -107,7 +107,7 @@ impl<I, V: Version> ArenaAccess<I, V> for crate::TrustedIndex {
 
 #[cfg(feature = "pui-core")]
 #[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
-impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for pui_vec::Id<I::Token> {
+impl<I: pui_core::OneShotIdentifier, V: Version> ArenaKey<I, V> for pui_vec::Id<I::Token> {
     fn validate_ident<'a>(&self, ident: &'a I, validator: Validator<'a>) -> CompleteValidator<'a> {
         if ident.owns_token(self.token()) {
             unsafe { validator.unchecked_index(ident) }
@@ -130,7 +130,7 @@ impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for pui_vec
     }
 }
 
-impl<I, V: Version> ArenaAccess<I, V> for Key<usize, V::Save> {
+impl<I, V: Version> ArenaKey<I, V> for Key<usize, V::Save> {
     fn index(&self) -> usize { self.id }
 
     fn version(&self) -> Option<V::Save> { Some(self.version) }
@@ -143,7 +143,7 @@ impl<I, V: Version> BuildArenaKey<I, V> for Key<usize, V::Save> {
 
 #[cfg(feature = "pui-core")]
 #[cfg_attr(docsrs, doc(cfg(feature = "pui")))]
-impl<I: pui_core::OneShotIdentifier, V: Version> ArenaAccess<I, V> for Key<pui_vec::Id<I::Token>, V::Save> {
+impl<I: pui_core::OneShotIdentifier, V: Version> ArenaKey<I, V> for Key<pui_vec::Id<I::Token>, V::Save> {
     fn validate_ident<'a>(&self, ident: &'a I, validator: Validator<'a>) -> CompleteValidator<'a> {
         if ident.owns_token(self.id().token()) {
             unsafe { validator.unchecked_index(ident) }
@@ -169,7 +169,7 @@ impl<I: pui_core::OneShotIdentifier, V: Version> BuildArenaKey<I, V> for Key<pui
     }
 }
 
-impl<I, V: Version> ArenaAccess<I, V> for Key<crate::TrustedIndex, V::Save> {
+impl<I, V: Version> ArenaKey<I, V> for Key<crate::TrustedIndex, V::Save> {
     fn validate_ident<'a>(&self, ident: &'a I, validator: Validator<'a>) -> CompleteValidator<'a> {
         unsafe { validator.unchecked_index(ident) }
     }

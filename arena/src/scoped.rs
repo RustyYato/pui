@@ -23,7 +23,7 @@
 
 use core::borrow::{Borrow, BorrowMut};
 
-use crate::{version::Version, ArenaAccess, BuildArenaKey, CompleteValidator, Validator};
+use crate::{version::Version, ArenaKey, BuildArenaKey, CompleteValidator, Validator};
 
 macro_rules! imp_scoped {
     (
@@ -280,16 +280,16 @@ impl<'scope, V> AsMut<ScopedKey<'scope, V>> for crate::Key<pui_vec::Id<pui_core:
     fn as_mut(&mut self) -> &mut ScopedKey<'scope, V> { unsafe { core::mem::transmute(self) } }
 }
 
-impl<'scope, V: Version> ArenaAccess<pui_core::scoped::Scoped<'scope>, V> for ScopedKey<'scope, V::Save> {
+impl<'scope, V: Version> ArenaKey<pui_core::scoped::Scoped<'scope>, V> for ScopedKey<'scope, V::Save> {
     fn validate_ident<'a>(
         &self,
         ident: &'a pui_core::scoped::Scoped<'scope>,
         validator: Validator<'a>,
     ) -> CompleteValidator<'a> {
-        ArenaAccess::<pui_core::scoped::Scoped<'scope>, V>::validate_ident(&self.0, ident, validator)
+        ArenaKey::<pui_core::scoped::Scoped<'scope>, V>::validate_ident(&self.0, ident, validator)
     }
-    fn index(&self) -> usize { ArenaAccess::<pui_core::scoped::Scoped<'scope>, V>::index(&self.0) }
-    fn version(&self) -> Option<V::Save> { ArenaAccess::<pui_core::scoped::Scoped<'scope>, V>::version(&self.0) }
+    fn index(&self) -> usize { ArenaKey::<pui_core::scoped::Scoped<'scope>, V>::index(&self.0) }
+    fn version(&self) -> Option<V::Save> { ArenaKey::<pui_core::scoped::Scoped<'scope>, V>::version(&self.0) }
 }
 
 impl<'scope, V: Version> BuildArenaKey<pui_core::scoped::Scoped<'scope>, V> for ScopedKey<'scope, V::Save> {

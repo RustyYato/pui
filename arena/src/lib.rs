@@ -66,7 +66,7 @@
 //! ## Implementation Details
 //!
 //! The core of this crate is the the [`Version`](version::Version) trait,
-//! the [`ArenaAccess`](ArenaAccess) trait, and the [`BuildArenaKey`](BuildArenaKey) trait.
+//! the [`ArenaKey`](ArenaKey) trait, and the [`BuildArenaKey`](BuildArenaKey) trait.
 //!
 //! `Version` specifies the behavior of the arenas.
 //! `pui-arena` provides three implementations,
@@ -87,8 +87,8 @@
 //!     * Keys produced by `insert` are not guartneed to be unique
 //!     * slots will never be "leaked"
 //!
-//! [`ArenaAccess`] specifies the behavior of keys into arenas.
-//! `pui-arena` provides a number of implementations. See [`ArenaAccess`]
+//! [`ArenaKey`] specifies the behavior of keys into arenas.
+//! `pui-arena` provides a number of implementations. See [`ArenaKey`]
 //! for details.
 //!
 //! * [`usize`] - allows accessing a given slot directly, with no regard for it's version
@@ -110,7 +110,7 @@
 //! * [`pui_vec::Id`] - allows accessing a given slot directly, with no regard for it's version
 //!     * elides bounds checks
 //!
-//! [`BuildArenaKey`] specifies how arenas should create keys, all implementors of [`ArenaAccess`]
+//! [`BuildArenaKey`] specifies how arenas should create keys, all implementors of [`ArenaKey`]
 //! provided by this crate also implement [`BuildArenaKey`] except for [`TrustedIndex`].
 //!
 //! # Custom arenas
@@ -179,7 +179,7 @@ pub extern crate alloc as std;
 pub mod version;
 
 mod arena_access;
-pub use arena_access::{ArenaAccess, BuildArenaKey, CompleteValidator, Key, Validator};
+pub use arena_access::{ArenaKey, BuildArenaKey, CompleteValidator, Key, Validator};
 
 /// the core implementations of different types of arenas
 pub mod base {
