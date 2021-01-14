@@ -37,7 +37,7 @@
 ///
 /// impl<I: Identifier> Owner<I> {
 ///     pub fn read<'a, T: ?Sized>(&'a self, handle: &'a Handle<I::Handle, T>) -> &'a T {
-///         assert!(self.ident.owns(&handle.handle));
+///         assert!(self.ident.owns_token(&handle.handle));
 ///         
 ///         // This is safe because `ident` owns the `handle`, which means that `self`
 ///         // is the only `Owner` that could shared access the underlying value
@@ -51,7 +51,7 @@
 ///     }
 ///
 ///     pub fn write<'a, T: ?Sized>(&'a mut self, handle: &'a Handle<I::Handle, T>) -> &'a mut T {
-///         assert!(self.ident.owns(&handle.handle));
+///         assert!(self.ident.owns_token(&handle.handle));
 ///         
 ///         // This is safe because `ident` owns the `handle`, which means that `self`
 ///         // is the only `Owner` that could exclusive access the underlying value
@@ -117,7 +117,7 @@ pub unsafe trait OneShotIdentifier: Identifier {}
 ///
 /// # Safety
 ///
-/// * `ident.owns(&token)` must return true for any `token` returned
+/// * `ident.owns_token(&token)` must return true for any `token` returned
 ///     from `ident.token()` regardless of when the token was created.
 /// * If two tokens compare equal, then `Identifier::owns` must act the
 ///     same for both of them

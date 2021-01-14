@@ -132,13 +132,16 @@
 //! ```
 //! // Because the backing id type is `()`, there are no bounds checks when using
 //! // this arena!
+//! # use inner::*; mod inner {
 //! pui_arena::newtype! {
-//!     struct MyCustomArena;
+//!     pub struct MyCustomArena;
 //! }
+//! # }
 //!
-//! let my_sparse_arena = sparse::Arena::new();
-//! let my_dense_arena = dense::Arena::new();
-//! let my_hop_arena = hop::Arena::new();
+//! let my_sparse_arena = sparse::Arena::<()>::new();
+//! // You can also use `dense` or `hop`
+//! // let my_dense_arena = dense::Arena::<()>::new();
+//! // let my_hop_arena = hop::Arena::<()>::new();
 //! ```
 //!
 //! Becomes something like
@@ -166,9 +169,10 @@
 //!     /// more type aliases here
 //! }
 //!
-//! let my_sparse_arena = sparse::Arena::new();
-//! let my_dense_arena = dense::Arena::new();
-//! let my_hop_arena = hop::Arena::new();
+//! let my_sparse_arena = sparse::Arena::<()>::new();
+//! // You can also use `dense` or `hop`
+//! // let my_dense_arena = dense::Arena::<()>::new();
+//! // let my_hop_arena = hop::Arena::<()>::new();
 //! ```
 //!
 //! Where each `Arena` newtype has a simplified api, and better error messages.
@@ -303,7 +307,7 @@ macro_rules! __newtype {
         /// The backing identifier for [`Arena`]
         $item_vis type Identifier = $crate::pui_core::dynamic::Dynamic<super::$name>;
         /// The key for [`Arena`]
-        $item_vis type Key = key::Key<$crate::pui_vec::Id<$crate::pui_core::dynamic::DynamicToken<super::$name>>, <Version as $crate::version::Version>::Save>;
+        $item_vis type Key = $crate::Key<$crate::pui_vec::Id<$crate::pui_core::dynamic::DynamicToken<super::$name>>, <Version as $crate::version::Version>::Save>;
 
         /// The backing arena for [`Arena`]
         $item_vis type BaseArena<T> = imp::Arena<T, Identifier, Version>;
@@ -416,7 +420,6 @@ macro_rules! __newtype {
             use $crate::core::ops::*;
             #[doc(hidden)]
             pub(super) use $crate::base::sparse as imp;
-            use $crate::base::sparse as key;
 
             /// The version for [`Arena`]
             $item_vis type Version = $version;
@@ -450,7 +453,6 @@ macro_rules! __newtype {
             use $crate::core::ops::*;
             #[doc(hidden)]
             pub(super) use $crate::base::hop as imp;
-            use $crate::base::hop as key;
 
             /// The version for [`Arena`]
             $item_vis type Version = $version;
@@ -484,7 +486,6 @@ macro_rules! __newtype {
             use $crate::core::ops::*;
             #[doc(hidden)]
             pub(super) use $crate::base::dense as imp;
-            use $crate::base::sparse as key;
 
             /// The version for [`Arena`]
             $item_vis type Version = $version;
